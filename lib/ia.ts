@@ -64,6 +64,7 @@ Regras:
           {
             type: "input_image",
             image_url: `data:image/png;base64,${base64}`,
+            detail: "auto",
           },
         ],
       },
