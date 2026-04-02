@@ -45,8 +45,6 @@ type Orcamento = {
   precoMetroLinear?: number;
   baseMetroLinear?: number;
   metrosMaterialCalculado?: number;
-  precoMaterial1?: number;
-  precoMaterial2?: number;
   material1Extra?: number;
   material2Extra?: number;
   dobradicas?: number;
@@ -80,11 +78,40 @@ const initialForm = {
   quer_material_2: true,
 };
 
+function Card({
+  title,
+  subtitle,
+  children,
+  rightSlot,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  rightSlot?: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+          {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+        </div>
+        {rightSlot}
+      </div>
+      <div className="p-6">{children}</div>
+    </section>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <label className="mb-2 block text-sm font-medium text-slate-700">{children}</label>;
+}
+
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white"
     />
   );
 }
@@ -93,56 +120,53 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
     />
   );
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <label className="mb-2 block text-sm font-medium text-slate-700">{children}</label>;
-}
-
-function Card({
-  title,
-  subtitle,
-  children,
+function CheckTile({
+  checked,
+  onChange,
+  label,
 }: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-6 py-5">
-        <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-        {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
-      </div>
-      <div className="p-6">{children}</div>
-    </section>
+    <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+    </label>
   );
 }
 
 function StatRow({
   label,
   value,
-  strong = false,
+  highlight = false,
 }: {
   label: string;
   value: string;
-  strong?: boolean;
+  highlight?: boolean;
 }) {
   return (
     <div
       className={`flex items-center justify-between rounded-2xl px-4 py-3 ${
-        strong ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-800"
+        highlight ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-800"
       }`}
     >
-      <span className={strong ? "font-medium" : "text-sm"}>{label}</span>
-      <span className={strong ? "text-lg font-semibold" : "text-sm font-semibold"}>
+      <span className={highlight ? "font-medium" : "text-sm"}>{label}</span>
+      <span className={highlight ? "text-lg font-semibold" : "text-sm font-semibold"}>
         {value}
       </span>
     </div>
   );
+}
+
+function formatMoney(value?: number) {
+  return `€ ${(value ?? 0).toFixed(2)}`;
 }
 
 export default function Page() {
@@ -362,7 +386,6 @@ export default function Page() {
       });
 
       if (!res.ok) throw new Error("Erro ao guardar");
-
       alert("Orçamento guardado com sucesso.");
     } catch {
       alert("Erro ao guardar orçamento.");
@@ -375,23 +398,23 @@ export default function Page() {
         <div className="mb-8 overflow-hidden rounded-[32px] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 p-8 text-white shadow-xl">
           <div className="max-w-3xl">
             <div className="mb-4 inline-flex rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-sm">
-              Valerie • Orçamentos com IA
+              Valerie • Sistema de Orçamentos
             </div>
             <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
-              Gerar orçamentos com aspeto profissional
+              Orçamentação profissional com análise por imagem
             </h1>
             <p className="mt-4 max-w-2xl text-base text-slate-300 md:text-lg">
-              Carrega a imagem do projeto, valida a análise, ajusta os dados e fecha
-              o orçamento com um resumo financeiro claro e profissional.
+              Cria orçamentos com um visual limpo, ajusta materiais, transporte,
+              montagem e extras, e apresenta um resultado final com aspeto comercial.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
           <div className="space-y-6">
             <Card
-              title="Dados do orçamento"
-              subtitle="Preenche os dados principais e carrega a imagem do projeto."
+              title="Novo orçamento"
+              subtitle="Preenche os dados principais do projeto e envia a imagem."
             >
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
@@ -427,7 +450,7 @@ export default function Page() {
                 <div>
                   <Label>Local da obra</Label>
                   <Input
-                    placeholder="Morada ou localização"
+                    placeholder="Morada / local da obra"
                     value={form.local_obra}
                     onChange={(e) => setForm({ ...form, local_obra: e.target.value })}
                   />
@@ -444,91 +467,53 @@ export default function Page() {
               </div>
 
               <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  Opções incluídas
-                </h3>
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Opções do projeto
+                  </h3>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                    Configuração rápida
+                  </span>
+                </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={form.quer_material_1}
-                      onChange={(e) =>
-                        setForm({ ...form, quer_material_1: e.target.checked })
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">Usar Material 1</span>
-                  </label>
-
-                  <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={form.quer_material_2}
-                      onChange={(e) =>
-                        setForm({ ...form, quer_material_2: e.target.checked })
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">Usar Material 2</span>
-                  </label>
-
-                  <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={form.quer_montagem}
-                      onChange={(e) =>
-                        setForm({ ...form, quer_montagem: e.target.checked })
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">Quero montagem</span>
-                  </label>
-
-                  <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={form.precisa_transporte}
-                      onChange={(e) =>
-                        setForm({ ...form, precisa_transporte: e.target.checked })
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">
-                      Precisa de transporte
-                    </span>
-                  </label>
-
-                  <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={form.precisa_voos}
-                      onChange={(e) =>
-                        setForm({ ...form, precisa_voos: e.target.checked })
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">Precisa de voos</span>
-                  </label>
-
-                  <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={form.precisa_tir}
-                      onChange={(e) =>
-                        setForm({ ...form, precisa_tir: e.target.checked })
-                      }
-                    />
-                    <span className="text-sm font-medium text-slate-700">
-                      Precisa de transporte TIR
-                    </span>
-                  </label>
-
-                  <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200 md:col-span-2">
-                    <input
-                      type="checkbox"
+                  <CheckTile
+                    checked={form.quer_material_1}
+                    onChange={(v) => setForm({ ...form, quer_material_1: v })}
+                    label="Usar Material 1"
+                  />
+                  <CheckTile
+                    checked={form.quer_material_2}
+                    onChange={(v) => setForm({ ...form, quer_material_2: v })}
+                    label="Usar Material 2"
+                  />
+                  <CheckTile
+                    checked={form.quer_montagem}
+                    onChange={(v) => setForm({ ...form, quer_montagem: v })}
+                    label="Quero montagem"
+                  />
+                  <CheckTile
+                    checked={form.precisa_transporte}
+                    onChange={(v) => setForm({ ...form, precisa_transporte: v })}
+                    label="Precisa de transporte"
+                  />
+                  <CheckTile
+                    checked={form.precisa_voos}
+                    onChange={(v) => setForm({ ...form, precisa_voos: v })}
+                    label="Precisa de voos"
+                  />
+                  <CheckTile
+                    checked={form.precisa_tir}
+                    onChange={(v) => setForm({ ...form, precisa_tir: v })}
+                    label="Precisa de transporte TIR"
+                  />
+                  <div className="md:col-span-2">
+                    <CheckTile
                       checked={form.quer_led}
-                      onChange={(e) =>
-                        setForm({ ...form, quer_led: e.target.checked })
-                      }
+                      onChange={(v) => setForm({ ...form, quer_led: v })}
+                      label="Quero LED"
                     />
-                    <span className="text-sm font-medium text-slate-700">Quero LED</span>
-                  </label>
+                  </div>
                 </div>
               </div>
 
@@ -568,8 +553,8 @@ export default function Page() {
 
             {analise && (
               <Card
-                title="Dados extraídos e ajustáveis"
-                subtitle="Confirma e corrige a análise antes de fechar o orçamento."
+                title="Validação da análise"
+                subtitle="Corrige ou confirma os dados extraídos antes de fechar o valor."
               >
                 <div className="grid gap-4 md:grid-cols-2">
                   {Object.entries(analise).map(([key, value]) => {
@@ -623,12 +608,8 @@ export default function Page() {
             {analise && (
               <Card
                 title="Artigos adicionais"
-                subtitle="Extras comerciais e técnicos que não venham da imagem."
-              >
-                <div className="mb-5 flex items-center justify-between">
-                  <div className="text-sm text-slate-500">
-                    Adiciona varões, cantos feijão, gaveteiros, puxadores e outros extras.
-                  </div>
+                subtitle="Inclui extras que não venham diretamente da análise da imagem."
+                rightSlot={
                   <button
                     type="button"
                     onClick={adicionarArtigoAdicional}
@@ -636,8 +617,8 @@ export default function Page() {
                   >
                     + Adicionar artigo
                   </button>
-                </div>
-
+                }
+              >
                 <div className="space-y-4">
                   {(analise.artigos_adicionais || []).map((artigo, index) => (
                     <div
@@ -695,7 +676,7 @@ export default function Page() {
                   ))}
 
                   {(analise.artigos_adicionais || []).length === 0 ? (
-                    <div className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                    <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                       Ainda não existem artigos adicionais neste orçamento.
                     </div>
                   ) : null}
@@ -707,93 +688,45 @@ export default function Page() {
           <div className="space-y-6">
             <Card
               title="Resumo financeiro"
-              subtitle="Visualização limpa dos valores calculados."
+              subtitle="Leitura clara e profissional dos valores do orçamento."
             >
               {!orcamento ? (
                 <div className="rounded-3xl bg-slate-50 p-8 text-center text-slate-500">
-                  Quando gerares o orçamento, os valores vão aparecer aqui de forma organizada.
+                  O resumo financeiro aparece aqui depois de gerar o orçamento.
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <StatRow
-                    label="Preço metro linear"
-                    value={`€ ${(orcamento.precoMetroLinear ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Base metro linear"
-                    value={`€ ${(orcamento.baseMetroLinear ?? 0).toFixed(2)}`}
-                  />
+                  <StatRow label="Preço metro linear" value={formatMoney(orcamento.precoMetroLinear)} />
+                  <StatRow label="Base metro linear" value={formatMoney(orcamento.baseMetroLinear)} />
                   <StatRow
                     label="Metros material calculado"
-                    value={`${orcamento.metrosMaterialCalculado ?? 0}`}
+                    value={String(orcamento.metrosMaterialCalculado ?? 0)}
                   />
-                  <StatRow
-                    label="Material 1"
-                    value={`€ ${(orcamento.material1Extra ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Material 2"
-                    value={`€ ${(orcamento.material2Extra ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Dobradiças"
-                    value={`€ ${(orcamento.dobradicas ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Corrediças"
-                    value={`€ ${(orcamento.corredicas ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="LED"
-                    value={`€ ${(orcamento.led ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Montagem"
-                    value={`€ ${(orcamento.montagem ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="KM faturados"
-                    value={`${orcamento.kmFaturados ?? 0} km`}
-                  />
-                  <StatRow
-                    label="Deslocação"
-                    value={`€ ${(orcamento.deslocacao ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Transporte"
-                    value={`€ ${(orcamento.transporte ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Alojamento"
-                    value={`€ ${(orcamento.alojamento ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Voos"
-                    value={`€ ${(orcamento.voos ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="TIR"
-                    value={`€ ${(orcamento.tir ?? 0).toFixed(2)}`}
-                  />
+                  <StatRow label="Material 1" value={formatMoney(orcamento.material1Extra)} />
+                  <StatRow label="Material 2" value={formatMoney(orcamento.material2Extra)} />
+                  <StatRow label="Dobradiças" value={formatMoney(orcamento.dobradicas)} />
+                  <StatRow label="Corrediças" value={formatMoney(orcamento.corredicas)} />
+                  <StatRow label="LED" value={formatMoney(orcamento.led)} />
+                  <StatRow label="Montagem" value={formatMoney(orcamento.montagem)} />
+                  <StatRow label="KM faturados" value={`${orcamento.kmFaturados ?? 0} km`} />
+                  <StatRow label="Deslocação" value={formatMoney(orcamento.deslocacao)} />
+                  <StatRow label="Transporte" value={formatMoney(orcamento.transporte)} />
+                  <StatRow label="Alojamento" value={formatMoney(orcamento.alojamento)} />
+                  <StatRow label="Voos" value={formatMoney(orcamento.voos)} />
+                  <StatRow label="TIR" value={formatMoney(orcamento.tir)} />
                   <StatRow
                     label="Artigos adicionais"
-                    value={`€ ${(orcamento.totalArtigosAdicionais ?? 0).toFixed(2)}`}
+                    value={formatMoney(orcamento.totalArtigosAdicionais)}
                   />
 
                   <div className="my-4 border-t border-slate-200" />
 
-                  <StatRow
-                    label="Subtotal"
-                    value={`€ ${(orcamento.subtotal ?? 0).toFixed(2)}`}
-                  />
-                  <StatRow
-                    label="Margem 50%"
-                    value={`€ ${(orcamento.valorMargem ?? 0).toFixed(2)}`}
-                  />
+                  <StatRow label="Subtotal" value={formatMoney(orcamento.subtotal)} />
+                  <StatRow label="Margem 50%" value={formatMoney(orcamento.valorMargem)} />
                   <StatRow
                     label="Total final"
-                    value={`€ ${(orcamento.total ?? 0).toFixed(2)}`}
-                    strong
+                    value={formatMoney(orcamento.total)}
+                    highlight
                   />
 
                   <div className="mt-5 grid gap-3">
@@ -816,8 +749,8 @@ export default function Page() {
             </Card>
 
             <Card
-              title="Estado do projeto"
-              subtitle="Leitura rápida para acompanhamento comercial."
+              title="Ficha comercial"
+              subtitle="Resumo rápido para consulta do estado do projeto."
             >
               <div className="grid gap-4">
                 <div className="rounded-2xl bg-slate-50 p-4">
