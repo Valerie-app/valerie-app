@@ -1,18 +1,54 @@
-import { CONFIG_ORCAMENTO, getPrecoMaterial, getPrecoMetroLinear } from "./tabelaprecos";
+import fs from "fs";
+import path from "path";
+
+const filePath = path.join(process.cwd(), "data", "config.json");
+
+function getConfig() {
+  const raw = fs.readFileSync(filePath, "utf-8");
+  return JSON.parse(raw);
+}
+
+function getPrecoMaterial(nome: string, config: any) {
+  if (!nome) return 0;
+
+  const materiais = config.materiais || {};
+
+  if (materiais[nome] !== undefined) {
+    return materiais[nome];
+  }
+
+  const n = nome.toLowerCase();
+
+  if (n.includes("melamina")) return 40;
+  if (n.includes("mdf")) return 55;
+  if (n.includes("carvalho")) return 80;
+  if (n.includes("lacado")) return 120;
+
+  return 50;
+}
+
+function getPrecoMetroLinear(tipoProjeto: string, tipoGama: string, config: any) {
+  return config.precoMetroLinear?.[tipoProjeto]?.[tipoGama] ?? 0;
+}
 
 export function calcularOrcamento(input: any) {
-  const precoMetroLinear = getPrecoMetroLinear(input.tipo_projeto || "Cozinha");
+  const config = getConfig();
+
+  const tipoProjeto = input.tipo_projeto || "Cozinha";
+  const tipoGama = input.tipo_gama || "Gama Média";
+
+  const precoMetroLinear = getPrecoMetroLinear(tipoProjeto, tipoGama, config);
 
   const baseMetroLinear = (input.medida_linear_m || 0) * precoMetroLinear;
 
   let metrosMaterialCalculado = input.medida_linear_m || 0;
 
-  if (input.tipo_projeto === "Cozinha" && input.tem_moveis_superiores) {
+  if (tipoProjeto === "Cozinha" && input.tem_moveis_superiores) {
     metrosMaterialCalculado = metrosMaterialCalculado * 2;
   }
 
-  const precoMaterial1 = getPrecoMaterial(input.material_1 || "");
-  const precoMaterial2 = getPrecoMaterial(input.material_2 || "");
+  const precoMaterial1 = getPrecoMaterial(input.material_1 || "", config);
+  const precoMaterial2 = getPrecoMaterial(input.material_2 || "", config);
 
   const material1Extra = input.quer_material_1
     ? metrosMaterialCalculado * precoMaterial1
@@ -22,37 +58,37 @@ export function calcularOrcamento(input: any) {
     ? metrosMaterialCalculado * precoMaterial2
     : 0;
 
-  const dobradicas = (input.qtd_dobradicas || 0) * CONFIG_ORCAMENTO.dobradica;
-  const corredicas = (input.qtd_corredicas || 0) * CONFIG_ORCAMENTO.corredica;
+  const dobradicas = (input.qtd_dobradicas || 0) * config.dobradica;
+  const corredicas = (input.qtd_corredicas || 0) * config.corredica;
 
   const led = input.quer_led
-    ? (input.metros_led || 0) * CONFIG_ORCAMENTO.ledMetro
+    ? (input.metros_led || 0) * config.ledMetro
     : 0;
 
   const montagem = input.quer_montagem
-    ? (input.montagem_homens || 0) * CONFIG_ORCAMENTO.montagemPorHomem
+    ? (input.montagem_homens || 0) * config.montagemPorHomem
     : 0;
 
   const kmFaturados = input.quer_montagem
     ? (input.km_calculados || 0) * 2
     : 0;
 
-  const deslocacao = kmFaturados * CONFIG_ORCAMENTO.precoKm;
+  const deslocacao = kmFaturados * config.precoKm;
 
   const transporte = input.precisa_transporte
-    ? (input.transporte_tir_mlinear || 0) * CONFIG_ORCAMENTO.transportePorMetro
+    ? (input.transporte_tir_mlinear || 0) * config.transportePorMetro
     : 0;
 
   const alojamento = input.precisa_transporte
-    ? (input.alojamento_noites || 0) * CONFIG_ORCAMENTO.alojamentoPorNoite
+    ? (input.alojamento_noites || 0) * config.alojamentoPorNoite
     : 0;
 
   const voos = input.precisa_voos
-    ? (input.voos_pessoas || 0) * CONFIG_ORCAMENTO.vooPorPessoa
+    ? (input.voos_pessoas || 0) * config.vooPorPessoa
     : 0;
 
   const tir = input.precisa_tir
-    ? (input.transporte_tir_mlinear || 0) * CONFIG_ORCAMENTO.tirPorMetro
+    ? (input.transporte_tir_mlinear || 0) * config.tirPorMetro
     : 0;
 
   const artigosAdicionais = Array.isArray(input.artigos_adicionais)
@@ -90,7 +126,7 @@ export function calcularOrcamento(input: any) {
     tir +
     totalArtigosAdicionais;
 
-  const valorMargem = subtotal * CONFIG_ORCAMENTO.margem;
+  const valorMargem = subtotal * config.margem;
   const total = subtotal + valorMargem;
 
   return {

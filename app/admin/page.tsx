@@ -4,10 +4,26 @@ import { useEffect, useState } from "react";
 
 type Config = {
   precoMetroLinear: {
-    Cozinha: number;
-    Roupeiro: number;
-    WC: number;
-    "Movel TV": number;
+    Cozinha: {
+      "Gama Baixa": number;
+      "Gama Média": number;
+      "Gama Alta": number;
+    };
+    Roupeiro: {
+      "Gama Baixa": number;
+      "Gama Média": number;
+      "Gama Alta": number;
+    };
+    WC: {
+      "Gama Baixa": number;
+      "Gama Média": number;
+      "Gama Alta": number;
+    };
+    "Movel TV": {
+      "Gama Baixa": number;
+      "Gama Média": number;
+      "Gama Alta": number;
+    };
   };
   precoKm: number;
   margem: number;
@@ -34,18 +50,48 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
 
 function Card({
   title,
+  subtitle,
   children,
 }: {
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-6 py-5">
         <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+        {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
       </div>
       <div className="p-6">{children}</div>
     </section>
+  );
+}
+
+function CampoNumero({
+  titulo,
+  descricao,
+  valor,
+  onChange,
+  step,
+}: {
+  titulo: string;
+  descricao: string;
+  valor: number;
+  onChange: (value: number) => void;
+  step?: string;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium text-slate-700">{titulo}</label>
+      <p className="mb-2 mt-1 text-xs text-slate-500">{descricao}</p>
+      <Input
+        type="number"
+        step={step}
+        value={valor}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </div>
   );
 }
 
@@ -126,166 +172,175 @@ export default function AdminPage() {
               Valerie • Painel Admin
             </div>
             <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
-              Configuração de preços
+              Configuração por gamas
             </h1>
             <p className="mt-4 max-w-2xl text-base text-slate-300 md:text-lg">
-              Altera preços, margem, km, materiais e artigos extra sem mexer no código.
+              Define preços por tipo de projeto e por gama: baixa, média e alta.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-2">
-          <Card title="Preço por metro linear">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                type="number"
-                value={config.precoMetroLinear.Cozinha}
-                onChange={(e) =>
-                  updateField("precoMetroLinear.Cozinha", Number(e.target.value))
-                }
-                placeholder="Cozinha"
-              />
-              <Input
-                type="number"
-                value={config.precoMetroLinear.Roupeiro}
-                onChange={(e) =>
-                  updateField("precoMetroLinear.Roupeiro", Number(e.target.value))
-                }
-                placeholder="Roupeiro"
-              />
-              <Input
-                type="number"
-                value={config.precoMetroLinear.WC}
-                onChange={(e) =>
-                  updateField("precoMetroLinear.WC", Number(e.target.value))
-                }
-                placeholder="WC"
-              />
-              <Input
-                type="number"
-                value={config.precoMetroLinear["Movel TV"]}
-                onChange={(e) =>
-                  updateField("precoMetroLinear.Movel TV", Number(e.target.value))
-                }
-                placeholder="Movel TV"
-              />
+        <div className="grid gap-6">
+          <Card
+            title="Preço por metro linear"
+            subtitle="Valores base por projeto e por gama."
+          >
+            <div className="space-y-8">
+              {Object.entries(config.precoMetroLinear).map(([tipoProjeto, gamas]) => (
+                <div key={tipoProjeto} className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                  <h3 className="mb-4 text-lg font-semibold text-slate-900">{tipoProjeto}</h3>
+                  <div className="grid gap-5 md:grid-cols-3">
+                    {Object.entries(gamas).map(([gama, valor]) => (
+                      <CampoNumero
+                        key={`${tipoProjeto}-${gama}`}
+                        titulo={`${gama}`}
+                        descricao={`Preço por metro linear para ${tipoProjeto} na ${gama}.`}
+                        valor={valueAsNumber(valor)}
+                        onChange={(v) =>
+                          updateField(`precoMetroLinear.${tipoProjeto}.${gama}`, v)
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </Card>
 
-          <Card title="Custos gerais">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                type="number"
-                value={config.precoKm}
-                onChange={(e) => updateField("precoKm", Number(e.target.value))}
-                placeholder="Preço KM"
-              />
-              <Input
-                type="number"
+          <Card
+            title="Custos gerais"
+            subtitle="Custos de produção, logística e margem comercial."
+          >
+            <div className="grid gap-5 md:grid-cols-2">
+              <CampoNumero
+                titulo="Preço por KM (€)"
+                descricao="Custo por quilómetro usado na deslocação."
+                valor={config.precoKm}
+                onChange={(v) => updateField("precoKm", v)}
                 step="0.01"
-                value={config.margem}
-                onChange={(e) => updateField("margem", Number(e.target.value))}
-                placeholder="Margem"
               />
-              <Input
-                type="number"
-                value={config.montagemPorHomem}
-                onChange={(e) =>
-                  updateField("montagemPorHomem", Number(e.target.value))
-                }
-                placeholder="Montagem por homem"
+
+              <CampoNumero
+                titulo="Margem (%)"
+                descricao="Percentagem aplicada ao subtotal. Ex: 0.5 = 50%."
+                valor={config.margem}
+                onChange={(v) => updateField("margem", v)}
+                step="0.01"
               />
-              <Input
-                type="number"
-                value={config.ledMetro}
-                onChange={(e) => updateField("ledMetro", Number(e.target.value))}
-                placeholder="LED por metro"
+
+              <CampoNumero
+                titulo="Montagem por homem (€)"
+                descricao="Valor de montagem por trabalhador."
+                valor={config.montagemPorHomem}
+                onChange={(v) => updateField("montagemPorHomem", v)}
               />
-              <Input
-                type="number"
-                value={config.dobradica}
-                onChange={(e) => updateField("dobradica", Number(e.target.value))}
-                placeholder="Dobradiça"
+
+              <CampoNumero
+                titulo="LED por metro (€)"
+                descricao="Preço por metro linear de LED."
+                valor={config.ledMetro}
+                onChange={(v) => updateField("ledMetro", v)}
               />
-              <Input
-                type="number"
-                value={config.corredica}
-                onChange={(e) => updateField("corredica", Number(e.target.value))}
-                placeholder="Corrediça"
+
+              <CampoNumero
+                titulo="Dobradiça (€)"
+                descricao="Preço unitário de cada dobradiça."
+                valor={config.dobradica}
+                onChange={(v) => updateField("dobradica", v)}
               />
-              <Input
-                type="number"
-                value={config.transportePorMetro}
-                onChange={(e) =>
-                  updateField("transportePorMetro", Number(e.target.value))
-                }
-                placeholder="Transporte por metro"
+
+              <CampoNumero
+                titulo="Corrediça (€)"
+                descricao="Preço unitário de cada corrediça."
+                valor={config.corredica}
+                onChange={(v) => updateField("corredica", v)}
               />
-              <Input
-                type="number"
-                value={config.alojamentoPorNoite}
-                onChange={(e) =>
-                  updateField("alojamentoPorNoite", Number(e.target.value))
-                }
-                placeholder="Alojamento por noite"
+
+              <CampoNumero
+                titulo="Transporte por metro (€)"
+                descricao="Custo de transporte por metro linear."
+                valor={config.transportePorMetro}
+                onChange={(v) => updateField("transportePorMetro", v)}
               />
-              <Input
-                type="number"
-                value={config.vooPorPessoa}
-                onChange={(e) => updateField("vooPorPessoa", Number(e.target.value))}
-                placeholder="Voo por pessoa"
+
+              <CampoNumero
+                titulo="Alojamento por noite (€)"
+                descricao="Custo por noite em deslocações com pernoita."
+                valor={config.alojamentoPorNoite}
+                onChange={(v) => updateField("alojamentoPorNoite", v)}
               />
-              <Input
-                type="number"
-                value={config.tirPorMetro}
-                onChange={(e) => updateField("tirPorMetro", Number(e.target.value))}
-                placeholder="TIR por metro"
+
+              <CampoNumero
+                titulo="Voo por pessoa (€)"
+                descricao="Valor médio por pessoa em viagens de avião."
+                valor={config.vooPorPessoa}
+                onChange={(v) => updateField("vooPorPessoa", v)}
+              />
+
+              <CampoNumero
+                titulo="Transporte TIR (€)"
+                descricao="Custo de transporte TIR por metro linear."
+                valor={config.tirPorMetro}
+                onChange={(v) => updateField("tirPorMetro", v)}
               />
             </div>
           </Card>
 
-          <Card title="Materiais">
-            <div className="grid gap-4 md:grid-cols-2">
+          <Card
+            title="Materiais"
+            subtitle="Tabela de preços dos materiais usados no cálculo."
+          >
+            <div className="grid gap-5 md:grid-cols-2">
               {Object.entries(config.materiais).map(([nome, valor]) => (
-                <Input
+                <CampoNumero
                   key={nome}
-                  type="number"
-                  value={valor}
-                  onChange={(e) =>
-                    updateField(`materiais.${nome}`, Number(e.target.value))
-                  }
-                  placeholder={nome}
+                  titulo={nome}
+                  descricao={`Preço do material: ${nome}.`}
+                  valor={valor}
+                  onChange={(v) => updateField(`materiais.${nome}`, v)}
                 />
               ))}
             </div>
           </Card>
 
-          <Card title="Artigos extra">
-            <div className="grid gap-4 md:grid-cols-2">
+          <Card
+            title="Artigos extra"
+            subtitle="Tabela de preços dos extras adicionais."
+          >
+            <div className="grid gap-5 md:grid-cols-2">
               {Object.entries(config.artigosExtras).map(([nome, valor]) => (
-                <Input
+                <CampoNumero
                   key={nome}
-                  type="number"
-                  value={valor}
-                  onChange={(e) =>
-                    updateField(`artigosExtras.${nome}`, Number(e.target.value))
-                  }
-                  placeholder={nome}
+                  titulo={nome}
+                  descricao={`Preço unitário do artigo extra: ${nome}.`}
+                  valor={valor}
+                  onChange={(v) => updateField(`artigosExtras.${nome}`, v)}
                 />
               ))}
             </div>
           </Card>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col gap-3 md:flex-row">
           <button
             onClick={guardar}
             className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800"
           >
             Guardar alterações
           </button>
+
+          <a
+            href="/"
+            className="rounded-2xl border border-slate-300 bg-white px-6 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Voltar ao orçamento
+          </a>
         </div>
       </div>
     </main>
   );
+}
+
+function valueAsNumber(value: unknown) {
+  return typeof value === "number" ? value : Number(value || 0);
 }

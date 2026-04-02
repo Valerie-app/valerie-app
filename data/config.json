@@ -1,9 +1,25 @@
 {
   "precoMetroLinear": {
-    "Cozinha": 700,
-    "Roupeiro": 650,
-    "WC": 500,
-    "Movel TV": 550
+    "Cozinha": {
+      "Gama Baixa": 550,
+      "Gama Média": 700,
+      "Gama Alta": 950
+    },
+    "Roupeiro": {
+      "Gama Baixa": 500,
+      "Gama Média": 650,
+      "Gama Alta": 850
+    },
+    "WC": {
+      "Gama Baixa": 350,
+      "Gama Média": 500,
+      "Gama Alta": 700
+    },
+    "Movel TV": {
+      "Gama Baixa": 400,
+      "Gama Média": 550,
+      "Gama Alta": 750
+    }
   },
   "precoKm": 0.6,
   "margem": 0.5,
