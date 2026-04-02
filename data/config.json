@@ -1,0 +1,34 @@
+{
+  "precoMetroLinear": {
+    "Cozinha": 700,
+    "Roupeiro": 650,
+    "WC": 500,
+    "Movel TV": 550
+  },
+  "precoKm": 0.6,
+  "margem": 0.5,
+  "montagemPorHomem": 225,
+  "dobradica": 8,
+  "corredica": 18,
+  "ledMetro": 25,
+  "transportePorMetro": 20,
+  "alojamentoPorNoite": 90,
+  "vooPorPessoa": 180,
+  "tirPorMetro": 35,
+  "materiais": {
+    "Melamina branca": 40,
+    "Melamina carvalho": 45,
+    "MDF": 55,
+    "Carvalho": 80,
+    "Lacado mate": 120,
+    "Lacado brilho": 130
+  },
+  "artigosExtras": {
+    "Varão roupeiro": 18,
+    "Canto feijão": 95,
+    "Sapateira extra": 75,
+    "Puxador premium": 12,
+    "Gaveteiro extra": 85,
+    "Prateleira extra": 25
+  }
+}
