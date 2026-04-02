@@ -1,4 +1,4 @@
-import { CONFIG_ORCAMENTO, getPrecoMaterial, getPrecoMetroLinear } from "./tabelaPrecos";
+import { CONFIG_ORCAMENTO, getPrecoMaterial, getPrecoMetroLinear } from "./tabelaprecos";
 
 export function calcularOrcamento(input: any) {
   const precoMetroLinear = getPrecoMetroLinear(input.tipo_projeto || "Cozinha");
