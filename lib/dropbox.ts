@@ -5,7 +5,11 @@ function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-function getDropboxEnv() {
+function getDropboxEnv(): {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+} {
   const clientId = process.env.DROPBOX_APP_KEY?.trim();
   const clientSecret = process.env.DROPBOX_APP_SECRET?.trim();
   const refreshToken = process.env.DROPBOX_REFRESH_TOKEN?.trim();
@@ -20,7 +24,11 @@ function getDropboxEnv() {
     throw new Error(`Faltam variáveis da Dropbox: ${missing.join(", ")}`);
   }
 
-  return { clientId, clientSecret, refreshToken };
+  return {
+    clientId,
+    clientSecret,
+    refreshToken,
+  };
 }
 
 async function getDropboxAccessToken() {
@@ -28,16 +36,17 @@ async function getDropboxAccessToken() {
 
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
+  const body = new URLSearchParams();
+  body.set("grant_type", "refresh_token");
+  body.set("refresh_token", refreshToken);
+
   const res = await fetch("https://api.dropboxapi.com/oauth2/token", {
     method: "POST",
     headers: {
       Authorization: `Basic ${basic}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    }).toString(),
+    body: body.toString(),
   });
 
   const data = await res.json();
