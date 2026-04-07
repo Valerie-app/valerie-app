@@ -10,19 +10,23 @@ function getDropboxEnv(): {
   clientSecret: string;
   refreshToken: string;
 } {
-  const clientId = process.env.DROPBOX_APP_KEY?.trim();
-  const clientSecret = process.env.DROPBOX_APP_SECRET?.trim();
-  const refreshToken = process.env.DROPBOX_REFRESH_TOKEN?.trim();
+  const rawClientId = process.env.DROPBOX_APP_KEY?.trim();
+  const rawClientSecret = process.env.DROPBOX_APP_SECRET?.trim();
+  const rawRefreshToken = process.env.DROPBOX_REFRESH_TOKEN?.trim();
 
   const missing: string[] = [];
 
-  if (!clientId) missing.push("DROPBOX_APP_KEY");
-  if (!clientSecret) missing.push("DROPBOX_APP_SECRET");
-  if (!refreshToken) missing.push("DROPBOX_REFRESH_TOKEN");
+  if (!rawClientId) missing.push("DROPBOX_APP_KEY");
+  if (!rawClientSecret) missing.push("DROPBOX_APP_SECRET");
+  if (!rawRefreshToken) missing.push("DROPBOX_REFRESH_TOKEN");
 
   if (missing.length > 0) {
     throw new Error(`Faltam variáveis da Dropbox: ${missing.join(", ")}`);
   }
+
+  const clientId = rawClientId as string;
+  const clientSecret = rawClientSecret as string;
+  const refreshToken = rawRefreshToken as string;
 
   return {
     clientId,
