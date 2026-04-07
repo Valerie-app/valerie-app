@@ -25,9 +25,9 @@ function getDropboxEnv(): {
   }
 
   return {
-    clientId: rawClientId,
-    clientSecret: rawClientSecret,
-    refreshToken: rawRefreshToken,
+    clientId: rawClientId!,
+    clientSecret: rawClientSecret!,
+    refreshToken: rawRefreshToken!,
   };
 }
 
