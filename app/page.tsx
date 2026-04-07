@@ -45,6 +45,8 @@ type Orcamento = {
   precoMetroLinear?: number;
   baseMetroLinear?: number;
   metrosMaterialCalculado?: number;
+  precoMaterial1?: number;
+  precoMaterial2?: number;
   material1Extra?: number;
   material2Extra?: number;
   dobradicas?: number;
@@ -169,6 +171,41 @@ function formatMoney(value?: number) {
   return `€ ${(value ?? 0).toFixed(2)}`;
 }
 
+function humanLabel(key: string) {
+  const labels: Record<string, string> = {
+    cliente: "Cliente",
+    referencia: "Referência",
+    tipo_cliente: "Tipo de cliente",
+    local_obra: "Local da obra",
+    km_calculados: "KM calculados",
+    tipo_projeto: "Tipo de projeto",
+    tipo_gama: "Tipo de gama",
+    medida_linear_m: "Medida linear (m)",
+    material_1: "Material 1",
+    material_2: "Material 2",
+    tem_moveis_superiores: "Tem móveis superiores",
+    qtd_dobradicas: "Qtd. dobradiças",
+    qtd_corredicas: "Qtd. corrediças",
+    led: "LED",
+    metros_led: "Metros LED",
+    montagem_homens: "Montagem homens",
+    deslocacao_km: "Deslocação KM",
+    transporte_tir_mlinear: "Transporte TIR m/linear",
+    alojamento_noites: "Alojamento noites",
+    voos_pessoas: "Voos pessoas",
+    margem_percentual: "Margem percentual",
+    quer_montagem: "Quer montagem",
+    precisa_transporte: "Precisa transporte",
+    precisa_voos: "Precisa voos",
+    precisa_tir: "Precisa TIR",
+    quer_led: "Quer LED",
+    quer_material_1: "Quer material 1",
+    quer_material_2: "Quer material 2",
+  };
+
+  return labels[key] || key;
+}
+
 export default function Page() {
   const [form, setForm] = useState(initialForm);
   const [file, setFile] = useState<File | null>(null);
@@ -273,13 +310,13 @@ export default function Page() {
         body: data,
       });
 
+      const analiseTexto = await analiseRes.text();
+
       if (!analiseRes.ok) {
-        const erroTexto = await analiseRes.text();
-        console.error("ERRO API:", erroTexto);
-        throw new Error(`Falha ao analisar imagem: ${erroTexto}`);
+        throw new Error(`Falha ao analisar imagem: ${analiseTexto}`);
       }
 
-      const analiseJson: Analise = await analiseRes.json();
+      const analiseJson: Analise = JSON.parse(analiseTexto);
 
       const analiseCompleta: Analise = {
         ...analiseJson,
@@ -294,13 +331,13 @@ export default function Page() {
         body: JSON.stringify(analiseCompleta),
       });
 
+      const calculoTexto = await calculoRes.text();
+
       if (!calculoRes.ok) {
-        const erroTexto = await calculoRes.text();
-        console.error("ERRO CALCULAR:", erroTexto);
-        throw new Error(`Falha ao calcular orçamento: ${erroTexto}`);
+        throw new Error(`Falha ao calcular orçamento: ${calculoTexto}`);
       }
 
-      const calculoJson: Orcamento = await calculoRes.json();
+      const calculoJson: Orcamento = JSON.parse(calculoTexto);
       setOrcamento(calculoJson);
     } catch (e) {
       console.error(e);
@@ -363,12 +400,13 @@ export default function Page() {
         body: JSON.stringify(analise),
       });
 
+      const calculoTexto = await calculoRes.text();
+
       if (!calculoRes.ok) {
-        const erroTexto = await calculoRes.text();
-        throw new Error(`Falha ao recalcular orçamento: ${erroTexto}`);
+        throw new Error(`Falha ao recalcular orçamento: ${calculoTexto}`);
       }
 
-      const calculoJson: Orcamento = await calculoRes.json();
+      const calculoJson: Orcamento = JSON.parse(calculoTexto);
       setOrcamento(calculoJson);
     } catch (e) {
       console.error(e);
@@ -387,14 +425,24 @@ export default function Page() {
 
       const res = await fetch("/api/orcamentos/guardar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ analise, orcamento }),
       });
 
-      if (!res.ok) throw new Error("Erro ao guardar");
+      const texto = await res.text();
 
+      if (!res.ok) {
+        console.error("ERRO GUARDAR:", texto);
+        alert("Erro ao guardar orçamento: " + texto);
+        return;
+      }
+
+      console.log("GUARDADO:", texto);
       alert("Orçamento guardado com sucesso.");
-    } catch {
+    } catch (error) {
+      console.error("ERRO FETCH GUARDAR:", error);
       alert("Erro ao guardar orçamento.");
     }
   }
@@ -593,14 +641,70 @@ export default function Page() {
                               atualizarAnalise(key as keyof Analise, e.target.checked)
                             }
                           />
-                          <span className="text-sm font-medium text-slate-700">{key}</span>
+                          <span className="text-sm font-medium text-slate-700">
+                            {humanLabel(key)}
+                          </span>
                         </label>
+                      );
+                    }
+
+                    if (key === "tipo_gama") {
+                      return (
+                        <div key={key}>
+                          <Label>{humanLabel(key)}</Label>
+                          <Select
+                            value={String(value)}
+                            onChange={(e) =>
+                              atualizarAnalise("tipo_gama", e.target.value)
+                            }
+                          >
+                            <option value="Gama Baixa">Gama Baixa</option>
+                            <option value="Gama Média">Gama Média</option>
+                            <option value="Gama Alta">Gama Alta</option>
+                          </Select>
+                        </div>
+                      );
+                    }
+
+                    if (key === "tipo_projeto") {
+                      return (
+                        <div key={key}>
+                          <Label>{humanLabel(key)}</Label>
+                          <Select
+                            value={String(value)}
+                            onChange={(e) =>
+                              atualizarAnalise("tipo_projeto", e.target.value)
+                            }
+                          >
+                            <option value="Cozinha">Cozinha</option>
+                            <option value="Roupeiro">Roupeiro</option>
+                            <option value="WC">WC</option>
+                            <option value="Movel TV">Movel TV</option>
+                          </Select>
+                        </div>
+                      );
+                    }
+
+                    if (key === "led") {
+                      return (
+                        <div key={key}>
+                          <Label>{humanLabel(key)}</Label>
+                          <Select
+                            value={String(value)}
+                            onChange={(e) =>
+                              atualizarAnalise("led", e.target.value)
+                            }
+                          >
+                            <option value="Não">Não</option>
+                            <option value="Sim">Sim</option>
+                          </Select>
+                        </div>
                       );
                     }
 
                     return (
                       <div key={key}>
-                        <Label>{key}</Label>
+                        <Label>{humanLabel(key)}</Label>
                         <Input
                           value={String(value)}
                           onChange={(e) =>
