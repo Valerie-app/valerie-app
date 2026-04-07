@@ -9,9 +9,7 @@ export async function POST(req: Request) {
     const orcamento = body.orcamento || {};
 
     const referencia = String(
-      analise.referencia ||
-        body.referencia ||
-        `SEM-REF-${Date.now()}`
+      analise.referencia || body.referencia || `SEM-REF-${Date.now()}`
     ).trim();
 
     await criarPastaDropbox(referencia);
@@ -33,8 +31,15 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("Erro ao guardar na Dropbox:", error);
 
+    const mensagem =
+      error instanceof Error
+        ? error.message
+        : "Erro desconhecido ao guardar na Dropbox.";
+
     return NextResponse.json(
-      { error: "Erro ao guardar orçamento na Dropbox." },
+      {
+        error: mensagem,
+      },
       { status: 500 }
     );
   }
