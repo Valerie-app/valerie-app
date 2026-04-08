@@ -1,8 +1,15 @@
+const DROPBOX_BASE_PATH = "/Orçamentos";
+
 function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
   return buffer.buffer.slice(
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength
   ) as ArrayBuffer;
+}
+
+function extrairReferenciaBase(texto: string): string {
+  const match = texto.match(/VAL\d+\.\d+/i);
+  return match ? match[0].toUpperCase() : texto.trim();
 }
 
 function getDropboxEnv() {
@@ -20,11 +27,7 @@ function getDropboxEnv() {
     throw new Error(`Faltam variáveis da Dropbox: ${missing.join(", ")}`);
   }
 
-  return {
-    clientId,
-    clientSecret,
-    refreshToken,
-  };
+  return { clientId, clientSecret, refreshToken };
 }
 
 async function getDropboxAccessToken() {
@@ -63,28 +66,9 @@ async function getDropboxAccessToken() {
   return data.access_token as string;
 }
 
-export async function criarPastaDropbox(referencia: string) {
-  const accessToken = await getDropboxAccessToken();
-
-  const res = await fetch("https://api.dropboxapi.com/2/files/create_folder_v2", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      path: `/orcamentos/${referencia}`,
-      autorename: false,
-    }),
-  });
-
-  if (res.ok) return;
-
-  const text = await res.text();
-
-  if (text.includes("conflict")) return;
-
-  throw new Error(`Erro ao criar pasta Dropbox: ${text}`);
+function montarPastaReferencia(referencia: string) {
+  const refBase = extrairReferenciaBase(referencia);
+  return `${DROPBOX_BASE_PATH}/${refBase}`;
 }
 
 export async function uploadJsonParaDropbox(
@@ -93,6 +77,7 @@ export async function uploadJsonParaDropbox(
   data: unknown
 ) {
   const accessToken = await getDropboxAccessToken();
+  const pasta = montarPastaReferencia(referencia);
   const contents = Buffer.from(JSON.stringify(data, null, 2), "utf-8");
 
   const res = await fetch("https://content.dropboxapi.com/2/files/upload", {
@@ -100,7 +85,7 @@ export async function uploadJsonParaDropbox(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Dropbox-API-Arg": JSON.stringify({
-        path: `/orcamentos/${referencia}/${nome}.json`,
+        path: `${pasta}/${nome}.json`,
         mode: "overwrite",
         autorename: false,
         mute: false,
@@ -125,13 +110,14 @@ export async function uploadBufferParaDropbox(
   buffer: Buffer
 ) {
   const accessToken = await getDropboxAccessToken();
+  const pasta = montarPastaReferencia(referencia);
 
   const res = await fetch("https://content.dropboxapi.com/2/files/upload", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Dropbox-API-Arg": JSON.stringify({
-        path: `/orcamentos/${referencia}/${nomeFicheiro}`,
+        path: `${pasta}/${nomeFicheiro}`,
         mode: "overwrite",
         autorename: false,
         mute: false,

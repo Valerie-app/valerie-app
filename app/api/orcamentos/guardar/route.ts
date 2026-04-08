@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { criarPastaDropbox, uploadJsonParaDropbox } from "@/lib/dropbox";
+import { uploadJsonParaDropbox } from "@/lib/dropbox";
 
 export async function POST(req: Request) {
   try {
@@ -11,8 +11,6 @@ export async function POST(req: Request) {
     const referencia = String(
       analise.referencia || body.referencia || `SEM-REF-${Date.now()}`
     ).trim();
-
-    await criarPastaDropbox(referencia);
 
     await uploadJsonParaDropbox(referencia, "analise", analise);
     await uploadJsonParaDropbox(referencia, "orcamento", orcamento);
@@ -26,7 +24,6 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       referencia,
-      pasta: `/orcamentos/${referencia}`,
     });
   } catch (error) {
     console.error("Erro ao guardar na Dropbox:", error);
@@ -37,9 +34,7 @@ export async function POST(req: Request) {
         : "Erro desconhecido ao guardar na Dropbox.";
 
     return NextResponse.json(
-      {
-        error: mensagem,
-      },
+      { error: mensagem },
       { status: 500 }
     );
   }
