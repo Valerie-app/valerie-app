@@ -1,0 +1,7 @@
+app
+└── api
+    └── orcamentos
+        ├── analisar
+        │   └── route.ts
+        └── calcular
+            └── route.ts
