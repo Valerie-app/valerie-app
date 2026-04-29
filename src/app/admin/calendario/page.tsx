@@ -1288,7 +1288,7 @@ export default function AdminCalendarioPage() {
         return;
       }
 
-      const resposta = await fetch("/api/calendario/enviar-alerta-planeamento", {
+      const resposta = await fetch("/api/enviar-alerta-planeamento", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
