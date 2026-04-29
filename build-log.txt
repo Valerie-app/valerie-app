@@ -1,0 +1,54 @@
+
+> valerie-app@0.1.0 build
+> next build
+
+▲ Next.js 16.2.3 (Turbopack)
+- Environments: .env.local
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 1647ms
+  Running TypeScript ...
+  Finished TypeScript in 2.2s ...
+  Collecting page data using 23 workers ...
+  Generating static pages using 23 workers (0/27) ...
+  Generating static pages using 23 workers (6/27) 
+  Generating static pages using 23 workers (13/27) 
+  Generating static pages using 23 workers (20/27) 
+✓ Generating static pages using 23 workers (27/27) in 195ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin
+├ ○ /admin - TESTE
+├ ○ /admin - TESTE/processos
+├ ○ /admin/clientes
+├ ○ /admin/financeiro
+├ ○ /admin/precos
+├ ○ /admin/processos
+├ ƒ /api/notificar-aprovacao-cliente
+├ ƒ /api/notificar-cliente-aprovado
+├ ƒ /api/submeter-orcamento
+├ ƒ /api/validar-orcamento
+├ ○ /aprovacao-clientes
+├ ○ /dashboard
+├ ○ /login
+├ ○ /novo-orcamento
+├ ○ /novo-orcamento - TESTE
+├ ○ /novo-orcamento - TESTE/artigos/artigo-livre
+├ ○ /novo-orcamento - TESTE/artigos/cozinha
+├ ○ /novo-orcamento - TESTE/artigos/movel-tv
+├ ○ /novo-orcamento - TESTE/artigos/movel-wc
+├ ○ /novo-orcamento - TESTE/artigos/roupeiro
+├ ○ /perfil
+├ ○ /processos
+└ ƒ /processos/[id]
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

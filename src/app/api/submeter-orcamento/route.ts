@@ -1,110 +1,251 @@
-import nodemailer from "nodemailer";
+import { createClient } from "@supabase/supabase-js";
+import { calcularPrazoProcesso, type RegraPrazo } from "@/lib/prazos";
 
-type ArtigoEmail = {
+type Extra = {
   nome?: string;
-  tipo?: string;
-  resumo?: string;
+  quantidade?: string | number;
 };
+
+type ArtigoPedido = {
+  tipo?: string;
+  nome?: string;
+  resumo?: string;
+  dados?: {
+    largura?: string | number;
+    altura?: string | number;
+    profundidade?: string | number;
+    material?: string;
+    acabamento?: string;
+    extras?: Extra[];
+    outrosAcessorios?: string;
+    [key: string]: any;
+  };
+  largura?: string | number;
+  altura?: string | number;
+  profundidade?: string | number;
+  material?: string;
+  extras?: Extra[];
+};
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl) throw new Error("NEXT_PUBLIC_SUPABASE_URL não definida.");
+if (!serviceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY não definida.");
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+function numeroSeguro(valor: unknown) {
+  const numero = Number(String(valor ?? "0").replace(",", "."));
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+function converterParaMetros(valor: number) {
+  if (valor > 20) return valor / 100;
+  return valor;
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const nomeCliente = body?.nomeCliente?.trim() || "";
-    const nomeObra = body?.nomeObra?.trim() || "";
-    const localizacao = body?.localizacao?.trim() || "";
-    const observacoes = body?.observacoes?.trim() || "";
-    const artigos: ArtigoEmail[] = Array.isArray(body?.artigos) ? body.artigos : [];
+    const clienteId = body.clienteId || body.cliente_id || null;
+    const nomeCliente = body.nomeCliente || body.nome_cliente || null;
+    const nomeObra = body.nomeObra || null;
+    const localizacao = body.localizacao || null;
+    const observacoes = body.observacoes || null;
+    const artigos = (body.artigos || []) as ArtigoPedido[];
 
-    if (!nomeCliente) {
+    if (!clienteId) {
       return Response.json(
-        { success: false, error: "Nome do cliente em falta." },
+        { success: false, error: "Cliente não identificado." },
         { status: 400 }
       );
     }
 
-    if (!nomeObra) {
+    if (!nomeObra || !String(nomeObra).trim()) {
       return Response.json(
-        { success: false, error: "Nome da obra em falta." },
+        { success: false, error: "Preencha o nome da obra." },
         { status: 400 }
       );
     }
 
-    if (artigos.length === 0) {
+    if (!artigos.length) {
       return Response.json(
-        { success: false, error: "É necessário pelo menos um artigo." },
+        { success: false, error: "Adicione pelo menos um artigo." },
         { status: 400 }
       );
     }
 
-    if (
-      !process.env.EMAIL_HOST ||
-      !process.env.EMAIL_PORT ||
-      !process.env.EMAIL_USER ||
-      !process.env.EMAIL_PASS
-    ) {
-      return Response.json(
-        { success: false, error: "Configuração de email incompleta." },
-        { status: 500 }
+    const { data: precos, error: erroPrecos } = await supabase
+      .from("precos")
+      .select("*");
+
+    if (erroPrecos) throw erroPrecos;
+
+    const { data: regrasPrazo, error: erroRegrasPrazo } = await supabase
+      .from("regras_prazo")
+      .select("tipo_regra, nome, dias");
+
+    if (erroRegrasPrazo) throw erroRegrasPrazo;
+
+    const { data: cliente, error: erroCliente } = await supabase
+      .from("clientes")
+      .select("desconto_percentual, nome")
+      .eq("id", clienteId)
+      .single<{ desconto_percentual: number | null; nome: string | null }>();
+
+    if (erroCliente) throw erroCliente;
+
+    const desconto = Number(cliente?.desconto_percentual || 0);
+
+    function getPreco(nome?: string | null) {
+      if (!nome) return 0;
+
+      const item = precos?.find(
+        (p) =>
+          String(p.nome || "").trim().toLowerCase() ===
+          String(nome).trim().toLowerCase()
       );
+
+      return Number(item?.valor || 0);
     }
 
-    const listaArtigos = artigos
-      .map((artigo, index) => {
-        return [
-          `${index + 1}. ${artigo.nome || "Artigo sem nome"}`,
-          `Tipo: ${artigo.tipo || "—"}`,
-          `Resumo: ${artigo.resumo || "—"}`,
-        ].join("\n");
+    function obterDadosArtigo(artigo: ArtigoPedido) {
+      const dadosOriginais = artigo.dados || {};
+
+      const larguraOriginal = numeroSeguro(
+        dadosOriginais.largura ?? artigo.largura
+      );
+      const alturaOriginal = numeroSeguro(
+        dadosOriginais.altura ?? artigo.altura
+      );
+      const profundidadeOriginal = numeroSeguro(
+        dadosOriginais.profundidade ?? artigo.profundidade
+      );
+
+      const largura = converterParaMetros(larguraOriginal);
+      const altura = converterParaMetros(alturaOriginal);
+      const profundidade = converterParaMetros(profundidadeOriginal);
+
+      const material =
+        dadosOriginais.material ||
+        dadosOriginais.acabamento ||
+        artigo.material ||
+        "";
+
+      const extras = Array.isArray(dadosOriginais.extras)
+        ? dadosOriginais.extras
+        : Array.isArray(artigo.extras)
+        ? artigo.extras
+        : [];
+
+      return {
+        ...dadosOriginais,
+        largura,
+        altura,
+        profundidade,
+        largura_original: larguraOriginal,
+        altura_original: alturaOriginal,
+        profundidade_original: profundidadeOriginal,
+        unidade_medida: larguraOriginal > 20 || alturaOriginal > 20 ? "cm" : "m",
+        material,
+        extras,
+      };
+    }
+
+    let total = 0;
+
+    for (const artigo of artigos) {
+      const dados = obterDadosArtigo(artigo);
+
+      const area = Number(dados.largura || 0) * Number(dados.altura || 0);
+
+      const precoTipo = getPreco(artigo.tipo);
+      const precoMaterial = getPreco(dados.material);
+
+      let subtotal = area * (precoTipo + precoMaterial);
+
+      for (const extra of dados.extras) {
+        subtotal += getPreco(extra.nome) * numeroSeguro(extra.quantidade);
+      }
+
+      total += subtotal;
+    }
+
+    const totalComDesconto = total - (total * desconto) / 100;
+
+    const prazo = calcularPrazoProcesso(
+      artigos.map((artigo) => {
+        const dados = obterDadosArtigo(artigo);
+
+        return {
+          tipo: artigo.tipo || "",
+          material: dados.material || "",
+          extras: dados.extras || [],
+        };
+      }),
+      (regrasPrazo || []) as RegraPrazo[]
+    );
+
+    const { data: processo, error: erroProcesso } = await supabase
+      .from("processos")
+      .insert({
+        cliente_id: clienteId,
+        nome_cliente: nomeCliente || cliente?.nome || null,
+        nome_obra: nomeObra,
+        localizacao,
+        observacoes,
+        estado: "Pedido Submetido",
+        valor_estimado: total,
+        desconto_percentual: desconto,
+        valor_estimado_com_desconto: totalComDesconto,
+        valor_final: null,
+        notas_admin: "",
+        dias_fabrico_previstos: prazo.diasFabrico,
+        dias_acabamento_previstos: prazo.diasAcabamento,
+        dias_montagem_previstos: prazo.diasMontagem,
+        dias_totais_previstos: prazo.diasTotais,
+        data_entrega_prevista: prazo.dataEntregaPrevista,
       })
-      .join("\n\n");
+      .select("id")
+      .single();
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: Number(process.env.EMAIL_PORT),
-      secure: Number(process.env.EMAIL_PORT) === 465,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+    if (erroProcesso || !processo) throw erroProcesso;
+
+    const artigosParaInserir = artigos.map((artigo) => {
+      const dados = obterDadosArtigo(artigo);
+
+      return {
+        processo_id: processo.id,
+        tipo: artigo.tipo || null,
+        nome: artigo.nome || artigo.tipo || "Artigo",
+        resumo: artigo.resumo || "Sem resumo",
+        dados,
+      };
     });
 
-    const assunto = `Novo pedido de orçamento — ${nomeCliente} — ${nomeObra}`;
+    const { error: erroArtigos } = await supabase
+      .from("artigos")
+      .insert(artigosParaInserir);
 
-    const textoEmail = [
-      "Foi submetido um novo pedido de orçamento.",
-      "",
-      "DADOS DO CLIENTE / OBRA",
-      `Nome do cliente: ${nomeCliente}`,
-      `Nome da obra: ${nomeObra}`,
-      `Localização: ${localizacao || "—"}`,
-      `Observações gerais: ${observacoes || "—"}`,
-      "",
-      "NOTA",
-      "A referência interna VALxxx.26 será atribuída na fase seguinte com ligação à Dropbox.",
-      "",
-      "ARTIGOS",
-      listaArtigos,
-    ].join("\n");
-
-    await transporter.sendMail({
-      from: `"VALERIE" <${process.env.EMAIL_USER}>`,
-      to: "geral@valerie.com.pt",
-      subject: assunto,
-      text: textoEmail,
-    });
+    if (erroArtigos) throw erroArtigos;
 
     return Response.json({
       success: true,
       message: "Pedido submetido com sucesso.",
+      processoId: processo.id,
+      total,
+      totalComDesconto,
+      prazo,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao submeter orçamento:", error);
 
     return Response.json(
       {
         success: false,
-        error: "Ocorreu um erro ao enviar o pedido de orçamento.",
+        error: error?.message || "Erro ao submeter orçamento.",
       },
       { status: 500 }
     );

@@ -1,7 +1,8 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type CSSProperties } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import LogoutButton from "@/components/LogoutButton";
 
 const STORAGE_KEY = "valerie_novo_orcamento";
 
@@ -36,11 +37,28 @@ type DadosOrcamento = {
   nomeObra: string;
   localizacao: string;
   observacoes: string;
+  ficheirosObra?: unknown[];
   artigos: Artigo[];
 };
 
+const menuCliente = [
+  { label: "Dashboard", path: "/dashboard-cliente" },
+  { label: "Novo Orçamento", path: "/novo-orcamento-cliente" },
+  { label: "Processos", path: "/processos-cliente" },
+  { label: "Perfil", path: "/perfil-cliente" },
+];
+
 export default function ArtigoLivrePage() {
+  return (
+    <Suspense fallback={<main style={mainStyle}>A carregar...</main>}>
+      <ArtigoLivreConteudo />
+    </Suspense>
+  );
+}
+
+function ArtigoLivreConteudo() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const editarId = searchParams.get("editar");
 
@@ -60,6 +78,40 @@ export default function ArtigoLivrePage() {
   const [numeroPessoas, setNumeroPessoas] = useState("");
   const [observacoesTecnicas, setObservacoesTecnicas] = useState("");
 
+  useEffect(() => {
+    if (!editarId) return;
+
+    const guardado = localStorage.getItem(STORAGE_KEY);
+    if (!guardado) return;
+
+    try {
+      const dados: DadosOrcamento = JSON.parse(guardado);
+      const artigo = dados.artigos.find((a) => String(a.id) === editarId);
+
+      if (!artigo || artigo.tipo !== "Artigo Livre" || !artigo.dados) return;
+
+      const d = artigo.dados as DadosArtigoLivre;
+
+      setNomeArtigo(d.nomeArtigo || "");
+      setCategoria(d.categoria || "");
+      setLargura(d.largura || "");
+      setAltura(d.altura || "");
+      setProfundidade(d.profundidade || "");
+      setDescricao(d.descricao || "");
+      setAcabamento(d.acabamento || "");
+      setLed(d.led || "Não");
+      setEmbalagem(d.embalagem || "");
+      setMontagem(d.montagem || "Não");
+      setKmIda(d.kmIda || "");
+      setKmRegresso(d.kmRegresso || "");
+      setTempoMontagem(d.tempoMontagem || "");
+      setNumeroPessoas(d.numeroPessoas || "");
+      setObservacoesTecnicas(d.observacoesTecnicas || "");
+    } catch (error) {
+      console.error(error);
+    }
+  }, [editarId]);
+
   function criarResumoArtigoLivre(dados: DadosArtigoLivre) {
     return `${dados.categoria || "Artigo livre"} • ${dados.largura || "—"} x ${
       dados.altura || "—"
@@ -67,36 +119,6 @@ export default function ArtigoLivrePage() {
       dados.acabamento || "Sem acabamento definido"
     }`;
   }
-
-  useEffect(() => {
-    if (!editarId) return;
-
-    const guardado = localStorage.getItem(STORAGE_KEY);
-    if (!guardado) return;
-
-    const dados: DadosOrcamento = JSON.parse(guardado);
-    const artigo = dados.artigos.find((a) => String(a.id) === editarId);
-
-    if (!artigo || artigo.tipo !== "Artigo Livre" || !artigo.dados) return;
-
-    const d = artigo.dados as DadosArtigoLivre;
-
-    setNomeArtigo(d.nomeArtigo || "");
-    setCategoria(d.categoria || "");
-    setLargura(d.largura || "");
-    setAltura(d.altura || "");
-    setProfundidade(d.profundidade || "");
-    setDescricao(d.descricao || "");
-    setAcabamento(d.acabamento || "");
-    setLed(d.led || "Não");
-    setEmbalagem(d.embalagem || "");
-    setMontagem(d.montagem || "Não");
-    setKmIda(d.kmIda || "");
-    setKmRegresso(d.kmRegresso || "");
-    setTempoMontagem(d.tempoMontagem || "");
-    setNumeroPessoas(d.numeroPessoas || "");
-    setObservacoesTecnicas(d.observacoesTecnicas || "");
-  }, [editarId]);
 
   function guardarArtigoLivre() {
     const dadosArtigoLivre: DadosArtigoLivre = {
@@ -118,6 +140,7 @@ export default function ArtigoLivrePage() {
     };
 
     const guardado = localStorage.getItem(STORAGE_KEY);
+
     const dadosOrcamento: DadosOrcamento = guardado
       ? JSON.parse(guardado)
       : {
@@ -125,6 +148,7 @@ export default function ArtigoLivrePage() {
           nomeObra: "",
           localizacao: "",
           observacoes: "",
+          ficheirosObra: [],
           artigos: [],
         };
 
@@ -152,7 +176,7 @@ export default function ArtigoLivrePage() {
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dadosOrcamento));
-    router.push("/novo-orcamento");
+    router.push("/novo-orcamento-cliente");
   }
 
   return (
@@ -161,18 +185,27 @@ export default function ArtigoLivrePage() {
         <div style={logoStyle}>VALERIE</div>
 
         <div style={menuContainerStyle}>
-          <a href="/" style={menuStyle}>Dashboard</a>
-          <a href="/novo-orcamento" style={{ ...menuStyle, background: "rgba(255,255,255,0.08)" }}>
-            Novo Orçamento
-          </a>
-          <a href="/processos" style={menuStyle}>Os Meus Processos</a>
-          <a href="/documentos" style={menuStyle}>Documentos</a>
-          <a href="/mensagens" style={menuStyle}>Mensagens</a>
-          <a href="/perfil" style={menuStyle}>Perfil</a>
+          {menuCliente.map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              onClick={() => router.push(item.path)}
+              style={{
+                ...menuStyle,
+                ...(pathname === item.path ? menuActiveStyle : {}),
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: "20px" }}>
+          <LogoutButton label="Terminar Sessão" fullWidth />
         </div>
       </aside>
 
-      <section style={{ flex: 1, padding: "40px" }}>
+      <section style={contentStyle}>
         <div style={{ marginBottom: "30px" }}>
           <h1 style={{ fontSize: "38px", margin: 0 }}>
             {editarId ? "Editar Artigo Livre" : "Configurar Artigo Livre"}
@@ -188,22 +221,12 @@ export default function ArtigoLivrePage() {
             <div style={grid2Style}>
               <div>
                 <label style={labelStyle}>Nome do Artigo</label>
-                <input
-                  value={nomeArtigo}
-                  onChange={(e) => setNomeArtigo(e.target.value)}
-                  placeholder="Ex: Consola Entrada"
-                  style={inputStyle}
-                />
+                <input value={nomeArtigo} onChange={(e) => setNomeArtigo(e.target.value)} placeholder="Ex: Consola Entrada" style={inputStyle} />
               </div>
 
               <div>
                 <label style={labelStyle}>Categoria</label>
-                <input
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
-                  placeholder="Ex: Hall / Escritório / Quarto"
-                  style={inputStyle}
-                />
+                <input value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Ex: Hall / Escritório / Quarto" style={inputStyle} />
               </div>
             </div>
           </div>
@@ -228,13 +251,7 @@ export default function ArtigoLivrePage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Descrição Técnica</h2>
-            <textarea
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              rows={5}
-              placeholder="Descreva o artigo, composição, pormenores e o que pretende."
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
+            <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={5} placeholder="Descreva o artigo, composição, pormenores e o que pretende." style={{ ...inputStyle, resize: "vertical" }} />
           </div>
 
           <div style={cardStyle}>
@@ -243,41 +260,41 @@ export default function ArtigoLivrePage() {
               <div>
                 <label style={labelStyle}>Acabamento</label>
                 <select value={acabamento} onChange={(e) => setAcabamento(e.target.value)} style={inputStyle}>
-                  <option value="">Selecionar</option>
-                  <option value="Lacado Mate">Lacado Mate</option>
-                  <option value="Lacado Brilho">Lacado Brilho</option>
-                  <option value="Folheado Mate">Folheado Mate</option>
-                  <option value="Folheado Brilho">Folheado Brilho</option>
-                  <option value="HPL Standard">HPL Standard</option>
-                  <option value="Fenix">Fenix</option>
-                  <option value="Premium">Premium</option>
-                  <option value="Melamina Lisa EGGER">Melamina Lisa EGGER</option>
-                  <option value="Melamina Madeira EGGER">Melamina Madeira EGGER</option>
+                  <option value="" style={optionStyle}>Selecionar</option>
+                  <option value="Lacado Mate" style={optionStyle}>Lacado Mate</option>
+                  <option value="Lacado Brilho" style={optionStyle}>Lacado Brilho</option>
+                  <option value="Folheado Mate" style={optionStyle}>Folheado Mate</option>
+                  <option value="Folheado Brilho" style={optionStyle}>Folheado Brilho</option>
+                  <option value="HPL Standard" style={optionStyle}>HPL Standard</option>
+                  <option value="Fenix" style={optionStyle}>Fenix</option>
+                  <option value="Premium" style={optionStyle}>Premium</option>
+                  <option value="Melamina Lisa EGGER" style={optionStyle}>Melamina Lisa EGGER</option>
+                  <option value="Melamina Madeira EGGER" style={optionStyle}>Melamina Madeira EGGER</option>
                 </select>
               </div>
 
               <div>
                 <label style={labelStyle}>LED</label>
                 <select value={led} onChange={(e) => setLed(e.target.value)} style={inputStyle}>
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
+                  <option value="Não" style={optionStyle}>Não</option>
+                  <option value="Sim" style={optionStyle}>Sim</option>
                 </select>
               </div>
 
               <div>
                 <label style={labelStyle}>Embalagem</label>
                 <select value={embalagem} onChange={(e) => setEmbalagem(e.target.value)} style={inputStyle}>
-                  <option value="">Selecionar</option>
-                  <option value="Simples">Simples</option>
-                  <option value="Reforçada">Reforçada</option>
+                  <option value="" style={optionStyle}>Selecionar</option>
+                  <option value="Simples" style={optionStyle}>Simples</option>
+                  <option value="Reforçada" style={optionStyle}>Reforçada</option>
                 </select>
               </div>
 
               <div>
                 <label style={labelStyle}>Pretende Montagem?</label>
                 <select value={montagem} onChange={(e) => setMontagem(e.target.value)} style={inputStyle}>
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
+                  <option value="Não" style={optionStyle}>Não</option>
+                  <option value="Sim" style={optionStyle}>Sim</option>
                 </select>
               </div>
             </div>
@@ -306,44 +323,25 @@ export default function ArtigoLivrePage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Observações Técnicas</h2>
-            <textarea
-              value={observacoesTecnicas}
-              onChange={(e) => setObservacoesTecnicas(e.target.value)}
-              rows={4}
-              placeholder="Notas técnicas, ferragens especiais, detalhes de execução..."
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
+            <textarea value={observacoesTecnicas} onChange={(e) => setObservacoesTecnicas(e.target.value)} rows={4} placeholder="Notas técnicas, ferragens especiais, detalhes de execução..." style={{ ...inputStyle, resize: "vertical" }} />
           </div>
 
           <div style={cardStyle}>
-            <h2 style={{ marginTop: 0 }}>Resumo Atual do Artigo Livre</h2>
-            <p><strong>Nome do Artigo:</strong> {nomeArtigo || "—"}</p>
+            <h2 style={{ marginTop: 0 }}>Resumo Atual</h2>
+            <p><strong>Nome:</strong> {nomeArtigo || "—"}</p>
             <p><strong>Categoria:</strong> {categoria || "—"}</p>
-            <p><strong>Largura:</strong> {largura || "—"} cm</p>
-            <p><strong>Altura:</strong> {altura || "—"} cm</p>
-            <p><strong>Profundidade:</strong> {profundidade || "—"} cm</p>
+            <p><strong>Medidas:</strong> {largura || "—"} x {altura || "—"} x {profundidade || "—"} cm</p>
             <p><strong>Acabamento:</strong> {acabamento || "—"}</p>
-            <p><strong>LED:</strong> {led || "—"}</p>
-            <p><strong>Embalagem:</strong> {embalagem || "—"}</p>
-            <p><strong>Montagem:</strong> {montagem || "—"}</p>
+            <p><strong>LED:</strong> {led}</p>
+            <p><strong>Montagem:</strong> {montagem}</p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: "10px",
-              gap: "12px",
-            }}
-          >
-            <button
-              onClick={() => router.push("/novo-orcamento")}
-              style={botaoVoltarStyle}
-            >
+          <div style={acoesStyle}>
+            <button type="button" onClick={() => router.push("/novo-orcamento-cliente")} style={botaoVoltarStyle}>
               Voltar
             </button>
 
-            <button onClick={guardarArtigoLivre} style={botaoPrincipalStyle}>
+            <button type="button" onClick={guardarArtigoLivre} style={botaoPrincipalStyle}>
               {editarId ? "Atualizar Artigo" : "Adicionar ao Orçamento"}
             </button>
           </div>
@@ -353,83 +351,111 @@ export default function ArtigoLivrePage() {
   );
 }
 
-const mainStyle: React.CSSProperties = {
-  minHeight: "100vh",
+const mainStyle: CSSProperties = {
+  minHeight: "100dvh",
   background: "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
   fontFamily: "Arial, sans-serif",
 };
 
-const asideStyle: React.CSSProperties = {
+const asideStyle: CSSProperties = {
   width: "260px",
-  minHeight: "100vh",
+  minHeight: "100dvh",
   borderRight: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(0,0,0,0.12)",
   padding: "30px 20px",
+  flexShrink: 0,
 };
 
-const logoStyle: React.CSSProperties = {
+const contentStyle: CSSProperties = {
+  flex: 1,
+  padding: "40px",
+  overflowX: "hidden",
+};
+
+const logoStyle: CSSProperties = {
   fontSize: "38px",
   letterSpacing: "10px",
   marginBottom: "40px",
 };
 
-const menuContainerStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
+const menuContainerStyle: CSSProperties = {
+  display: "grid",
   gap: "12px",
 };
 
-const menuStyle: React.CSSProperties = {
+const menuStyle: CSSProperties = {
+  width: "100%",
   padding: "14px 16px",
   borderRadius: "10px",
+  border: "1px solid rgba(255,255,255,0.06)",
   background: "rgba(255,255,255,0.04)",
   color: "white",
-  textDecoration: "none",
+  textAlign: "left",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
 
-const labelStyle: React.CSSProperties = {
+const menuActiveStyle: CSSProperties = {
+  background: "rgba(92,115,199,0.35)",
+  border: "1px solid rgba(92,115,199,0.65)",
+};
+
+const labelStyle: CSSProperties = {
   display: "block",
   marginBottom: "8px",
+  fontWeight: "bold",
 };
 
-const cardStyle: React.CSSProperties = {
+const cardStyle: CSSProperties = {
   padding: "24px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%",
   padding: "14px",
   borderRadius: "10px",
   border: "1px solid rgba(255,255,255,0.1)",
   background: "rgba(255,255,255,0.06)",
   color: "white",
+  outline: "none",
 };
 
-const grid2Style: React.CSSProperties = {
+const optionStyle: CSSProperties = {
+  color: "black",
+};
+
+const grid2Style: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "16px",
 };
 
-const grid3Style: React.CSSProperties = {
+const grid3Style: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
   gap: "16px",
 };
 
-const grid4Style: React.CSSProperties = {
+const grid4Style: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: "16px",
 };
 
-const botaoPrincipalStyle: React.CSSProperties = {
-  background: "linear-gradient(180deg, #4b5f9e 0%, #34457c 100%)",
+const acoesStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  marginTop: "10px",
+  gap: "12px",
+};
+
+const botaoPrincipalStyle: CSSProperties = {
+  background: "linear-gradient(180deg, #5c73c7 0%, #4057a8 100%)",
   color: "white",
   border: "none",
   borderRadius: "10px",
@@ -439,7 +465,7 @@ const botaoPrincipalStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const botaoVoltarStyle: React.CSSProperties = {
+const botaoVoltarStyle: CSSProperties = {
   background: "rgba(255,255,255,0.08)",
   color: "white",
   border: "1px solid rgba(255,255,255,0.08)",

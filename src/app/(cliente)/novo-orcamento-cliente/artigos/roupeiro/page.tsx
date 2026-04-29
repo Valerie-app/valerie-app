@@ -1,7 +1,8 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type CSSProperties } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import LogoutButton from "@/components/LogoutButton";
 
 const STORAGE_KEY = "valerie_novo_orcamento";
 
@@ -59,8 +60,24 @@ type DadosOrcamento = {
   artigos: Artigo[];
 };
 
+const menuCliente = [
+  { label: "Dashboard", path: "/dashboard-cliente" },
+  { label: "Novo Orçamento", path: "/novo-orcamento-cliente" },
+  { label: "Processos", path: "/processos-cliente" },
+  { label: "Perfil", path: "/perfil-cliente" },
+];
+
 export default function RoupeiroPage() {
+  return (
+    <Suspense fallback={<main style={mainStyle}>A carregar...</main>}>
+      <RoupeiroConteudo />
+    </Suspense>
+  );
+}
+
+function RoupeiroConteudo() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const editarId = searchParams.get("editar");
 
@@ -79,22 +96,16 @@ export default function RoupeiroPage() {
   const [kmRegresso, setKmRegresso] = useState("");
   const [tempoMontagem, setTempoMontagem] = useState("");
   const [numeroPessoas, setNumeroPessoas] = useState("");
-
   const [temVaroes, setTemVaroes] = useState("Não");
   const [quantidadeVaroes, setQuantidadeVaroes] = useState("");
-
   const [temGavetasJoias, setTemGavetasJoias] = useState("Não");
   const [quantidadeGavetasJoias, setQuantidadeGavetasJoias] = useState("");
-
   const [temCalceiros, setTemCalceiros] = useState("Não");
   const [quantidadeCalceiros, setQuantidadeCalceiros] = useState("");
-
   const [temSapateiras, setTemSapateiras] = useState("Não");
   const [quantidadeSapateiras, setQuantidadeSapateiras] = useState("");
-
   const [temDivisorias, setTemDivisorias] = useState("Não");
   const [quantidadeDivisorias, setQuantidadeDivisorias] = useState("");
-
   const [outrosAcessorios, setOutrosAcessorios] = useState("");
   const [ficheirosArtigo, setFicheirosArtigo] = useState<FicheiroMeta[]>([]);
 
@@ -103,40 +114,13 @@ export default function RoupeiroPage() {
   }
 
   function criarResumoRoupeiro(dados: DadosRoupeiro) {
-    const partesExtras: string[] = [];
-
-    if (dados.temVaroes === "Sim") {
-      partesExtras.push(`Varões: ${dados.quantidadeVaroes || "—"}`);
-    }
-
-    if (dados.temGavetasJoias === "Sim") {
-      partesExtras.push(
-        `Gavetas de Joias: ${dados.quantidadeGavetasJoias || "—"}`
-      );
-    }
-
-    if (dados.temCalceiros === "Sim") {
-      partesExtras.push(`Calceiros: ${dados.quantidadeCalceiros || "—"}`);
-    }
-
-    if (dados.temSapateiras === "Sim") {
-      partesExtras.push(`Sapateiras: ${dados.quantidadeSapateiras || "—"}`);
-    }
-
-    if (dados.temDivisorias === "Sim") {
-      partesExtras.push(`Divisórias: ${dados.quantidadeDivisorias || "—"}`);
-    }
-
-    const extrasTexto =
-      partesExtras.length > 0 ? ` • ${partesExtras.join(" • ")}` : "";
-
     return `${dados.largura || "—"} x ${dados.altura || "—"} x ${
       dados.profundidade || "—"
     } cm • ${dados.gavetas || "0"} gavetas • ${
       dados.prateleiras || "0"
     } prateleiras • Portas: ${dados.tipoPortas || "—"} • LED: ${
       dados.led || "Não"
-    } • Ficheiros: ${dados.ficheirosArtigo.length}${extrasTexto}`;
+    } • Ficheiros: ${dados.ficheirosArtigo.length}`;
   }
 
   useEffect(() => {
@@ -197,7 +181,9 @@ export default function RoupeiroPage() {
   }
 
   function removerFicheiroArtigo(id: number) {
-    setFicheirosArtigo((anterior) => anterior.filter((ficheiro) => ficheiro.id !== id));
+    setFicheirosArtigo((anterior) =>
+      anterior.filter((ficheiro) => ficheiro.id !== id)
+    );
   }
 
   function adicionarAoOrcamento() {
@@ -267,51 +253,32 @@ export default function RoupeiroPage() {
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dadosOrcamento));
-    router.push("/novo-orcamento");
+    router.push("/novo-orcamento-cliente");
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
-        color: "white",
-        display: "flex",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <aside
-        style={{
-          width: "260px",
-          minHeight: "100vh",
-          borderRight: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(0,0,0,0.12)",
-          padding: "30px 20px",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "38px",
-            letterSpacing: "10px",
-            marginBottom: "40px",
-          }}
-        >
-          VALERIE
+    <main style={mainStyle}>
+      <aside style={asideStyle}>
+        <div style={logoStyle}>VALERIE</div>
+
+        <div style={menuContainerStyle}>
+          {menuCliente.map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              onClick={() => router.push(item.path)}
+              style={{
+                ...menuStyle,
+                ...(pathname === item.path ? menuActiveStyle : {}),
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <a href="/" style={menuStyle}>Dashboard</a>
-          <a
-            href="/novo-orcamento"
-            style={{ ...menuStyle, background: "rgba(255,255,255,0.08)" }}
-          >
-            Novo Orçamento
-          </a>
-          <a href="/processos" style={menuStyle}>Os Meus Processos</a>
-          <a href="/documentos" style={menuStyle}>Documentos</a>
-          <a href="/mensagens" style={menuStyle}>Mensagens</a>
-          <a href="/perfil" style={menuStyle}>Perfil</a>
+        <div style={{ marginTop: "20px" }}>
+          <LogoutButton label="Terminar Sessão" fullWidth />
         </div>
       </aside>
 
@@ -339,10 +306,6 @@ export default function RoupeiroPage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Ficheiros do Artigo</h2>
-            <p style={{ opacity: 0.8, marginTop: 0, marginBottom: "16px" }}>
-              Carregue imagens, PDFs, desenhos ou referências deste roupeiro.
-            </p>
-
             <input
               type="file"
               multiple
@@ -354,23 +317,11 @@ export default function RoupeiroPage() {
             {ficheirosArtigo.length > 0 && (
               <div style={{ marginTop: "18px", display: "grid", gap: "10px" }}>
                 {ficheirosArtigo.map((ficheiro) => (
-                  <div
-                    key={ficheiro.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "12px",
-                      padding: "12px 14px",
-                      borderRadius: "10px",
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                    }}
-                  >
+                  <div key={ficheiro.id} style={fileRowStyle}>
                     <div>
                       <div style={{ fontWeight: "bold" }}>{ficheiro.nome}</div>
-                      <div style={{ opacity: 0.75, fontSize: "13px", marginTop: "4px" }}>
-                        {ficheiro.tipo || "desconhecido"} • {(ficheiro.tamanho / 1024).toFixed(1)} KB
+                      <div style={{ opacity: 0.75, fontSize: "13px" }}>
+                        {ficheiro.tipo} • {(ficheiro.tamanho / 1024).toFixed(1)} KB
                       </div>
                     </div>
 
@@ -388,24 +339,15 @@ export default function RoupeiroPage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Medidas</h2>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: "16px",
-              }}
-            >
+            <div style={grid3Style}>
               <div>
                 <label style={labelStyle}>Altura (cm)</label>
                 <input value={altura} onChange={(e) => setAltura(e.target.value)} style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Largura (cm)</label>
                 <input value={largura} onChange={(e) => setLargura(e.target.value)} style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Profundidade (cm)</label>
                 <input value={profundidade} onChange={(e) => setProfundidade(e.target.value)} style={inputStyle} />
@@ -415,19 +357,11 @@ export default function RoupeiroPage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Configuração Interior</h2>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "16px",
-              }}
-            >
+            <div style={grid2Style}>
               <div>
                 <label style={labelStyle}>Número de Gavetas</label>
                 <input value={gavetas} onChange={(e) => setGavetas(e.target.value)} style={inputStyle} />
               </div>
-
               <div>
                 <label style={labelStyle}>Número de Prateleiras</label>
                 <input value={prateleiras} onChange={(e) => setPrateleiras(e.target.value)} style={inputStyle} />
@@ -437,14 +371,7 @@ export default function RoupeiroPage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Portas e Iluminação</h2>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "16px",
-              }}
-            >
+            <div style={grid2Style}>
               <div>
                 <label style={labelStyle}>Tipo de Portas</label>
                 <select value={tipoPortas} onChange={(e) => setTipoPortas(e.target.value)} style={inputStyle}>
@@ -453,7 +380,6 @@ export default function RoupeiroPage() {
                   <option value="Correr">Portas de Correr</option>
                 </select>
               </div>
-
               <div>
                 <label style={labelStyle}>LED nas laterais por porta</label>
                 <select value={led} onChange={(e) => setLed(e.target.value)} style={inputStyle}>
@@ -467,128 +393,57 @@ export default function RoupeiroPage() {
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Ferragens e Acessórios</h2>
 
-            <div style={{ display: "grid", gap: "20px" }}>
-              <div>
-                <label style={labelStyle}>Varões</label>
-                <select value={temVaroes} onChange={(e) => setTemVaroes(e.target.value)} style={inputStyle}>
+            {[
+              ["Varões", temVaroes, setTemVaroes, quantidadeVaroes, setQuantidadeVaroes],
+              ["Gavetas de Joias", temGavetasJoias, setTemGavetasJoias, quantidadeGavetasJoias, setQuantidadeGavetasJoias],
+              ["Calceiros", temCalceiros, setTemCalceiros, quantidadeCalceiros, setQuantidadeCalceiros],
+              ["Sapateiras", temSapateiras, setTemSapateiras, quantidadeSapateiras, setQuantidadeSapateiras],
+              ["Divisórias", temDivisorias, setTemDivisorias, quantidadeDivisorias, setQuantidadeDivisorias],
+            ].map(([label, tem, setTem, qtd, setQtd]) => (
+              <div key={String(label)} style={{ marginBottom: "16px" }}>
+                <label style={labelStyle}>{String(label)}</label>
+                <select
+                  value={String(tem)}
+                  onChange={(e) =>
+                    (setTem as React.Dispatch<React.SetStateAction<string>>)(
+                      e.target.value
+                    )
+                  }
+                  style={inputStyle}
+                >
                   <option value="Não">Não</option>
                   <option value="Sim">Sim</option>
                 </select>
 
-                {temVaroes === "Sim" && (
+                {tem === "Sim" && (
                   <div style={{ marginTop: "12px" }}>
-                    <label style={labelStyle}>Quantidade de Varões</label>
+                    <label style={labelStyle}>Quantidade</label>
                     <input
-                      value={quantidadeVaroes}
-                      onChange={(e) => setQuantidadeVaroes(e.target.value)}
+                      value={String(qtd)}
+                      onChange={(e) =>
+                        (setQtd as React.Dispatch<React.SetStateAction<string>>)(
+                          e.target.value
+                        )
+                      }
                       style={inputStyle}
                     />
                   </div>
                 )}
               </div>
+            ))}
 
-              <div>
-                <label style={labelStyle}>Gavetas de Joias</label>
-                <select value={temGavetasJoias} onChange={(e) => setTemGavetasJoias(e.target.value)} style={inputStyle}>
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
-                </select>
-
-                {temGavetasJoias === "Sim" && (
-                  <div style={{ marginTop: "12px" }}>
-                    <label style={labelStyle}>Quantidade de Gavetas de Joias</label>
-                    <input
-                      value={quantidadeGavetasJoias}
-                      onChange={(e) => setQuantidadeGavetasJoias(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label style={labelStyle}>Calceiros</label>
-                <select value={temCalceiros} onChange={(e) => setTemCalceiros(e.target.value)} style={inputStyle}>
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
-                </select>
-
-                {temCalceiros === "Sim" && (
-                  <div style={{ marginTop: "12px" }}>
-                    <label style={labelStyle}>Quantidade de Calceiros</label>
-                    <input
-                      value={quantidadeCalceiros}
-                      onChange={(e) => setQuantidadeCalceiros(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label style={labelStyle}>Sapateiras</label>
-                <select value={temSapateiras} onChange={(e) => setTemSapateiras(e.target.value)} style={inputStyle}>
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
-                </select>
-
-                {temSapateiras === "Sim" && (
-                  <div style={{ marginTop: "12px" }}>
-                    <label style={labelStyle}>Quantidade de Sapateiras</label>
-                    <input
-                      value={quantidadeSapateiras}
-                      onChange={(e) => setQuantidadeSapateiras(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label style={labelStyle}>Divisórias</label>
-                <select value={temDivisorias} onChange={(e) => setTemDivisorias(e.target.value)} style={inputStyle}>
-                  <option value="Não">Não</option>
-                  <option value="Sim">Sim</option>
-                </select>
-
-                {temDivisorias === "Sim" && (
-                  <div style={{ marginTop: "12px" }}>
-                    <label style={labelStyle}>Quantidade de Divisórias</label>
-                    <input
-                      value={quantidadeDivisorias}
-                      onChange={(e) => setQuantidadeDivisorias(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ marginTop: "20px" }}>
-              <label style={labelStyle}>Outros Acessórios / Ferragens</label>
-              <textarea
-                value={outrosAcessorios}
-                onChange={(e) => setOutrosAcessorios(e.target.value)}
-                placeholder="Ex: ferragens especiais, acessórios interiores, observações..."
-                rows={4}
-                style={{
-                  ...inputStyle,
-                  resize: "vertical",
-                }}
-              />
-            </div>
+            <label style={labelStyle}>Outros Acessórios / Ferragens</label>
+            <textarea
+              value={outrosAcessorios}
+              onChange={(e) => setOutrosAcessorios(e.target.value)}
+              rows={4}
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
           </div>
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Acabamento e Embalagem</h2>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "16px",
-              }}
-            >
+            <div style={grid2Style}>
               <div>
                 <label style={labelStyle}>Acabamento</label>
                 <select value={acabamento} onChange={(e) => setAcabamento(e.target.value)} style={inputStyle}>
@@ -601,9 +456,7 @@ export default function RoupeiroPage() {
                   <option value="Fenix">Fenix</option>
                   <option value="Premium">Premium</option>
                   <option value="Melamina Lisa EGGER">Melamina Lisa EGGER</option>
-                  <option value="Melamina Fantasia Madeira EGGER">
-                    Melamina Fantasia de Madeira EGGER
-                  </option>
+                  <option value="Melamina Fantasia Madeira EGGER">Melamina Fantasia de Madeira EGGER</option>
                 </select>
               </div>
 
@@ -620,79 +473,39 @@ export default function RoupeiroPage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Montagem</h2>
-
-            <div style={{ marginBottom: "16px" }}>
-              <label style={labelStyle}>Pretende Montagem?</label>
-              <select value={montagem} onChange={(e) => setMontagem(e.target.value)} style={inputStyle}>
-                <option value="Não">Não</option>
-                <option value="Sim">Sim</option>
-              </select>
-            </div>
+            <label style={labelStyle}>Pretende Montagem?</label>
+            <select value={montagem} onChange={(e) => setMontagem(e.target.value)} style={inputStyle}>
+              <option value="Não">Não</option>
+              <option value="Sim">Sim</option>
+            </select>
 
             {montagem === "Sim" && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                  gap: "16px",
-                }}
-              >
-                <div>
-                  <label style={labelStyle}>Km ida</label>
-                  <input value={kmIda} onChange={(e) => setKmIda(e.target.value)} style={inputStyle} />
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Km regresso</label>
-                  <input value={kmRegresso} onChange={(e) => setKmRegresso(e.target.value)} style={inputStyle} />
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Tempo de montagem</label>
-                  <input value={tempoMontagem} onChange={(e) => setTempoMontagem(e.target.value)} style={inputStyle} />
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Número de pessoas</label>
-                  <input value={numeroPessoas} onChange={(e) => setNumeroPessoas(e.target.value)} style={inputStyle} />
-                </div>
+              <div style={{ ...grid4Style, marginTop: "16px" }}>
+                <input placeholder="Km ida" value={kmIda} onChange={(e) => setKmIda(e.target.value)} style={inputStyle} />
+                <input placeholder="Km regresso" value={kmRegresso} onChange={(e) => setKmRegresso(e.target.value)} style={inputStyle} />
+                <input placeholder="Tempo de montagem" value={tempoMontagem} onChange={(e) => setTempoMontagem(e.target.value)} style={inputStyle} />
+                <input placeholder="Número de pessoas" value={numeroPessoas} onChange={(e) => setNumeroPessoas(e.target.value)} style={inputStyle} />
               </div>
             )}
           </div>
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Resumo Atual do Roupeiro</h2>
-            <p><strong>Nome do Artigo:</strong> {nomeArtigo || "—"}</p>
+            <p><strong>Nome:</strong> {nomeArtigo || "—"}</p>
             <p><strong>Altura:</strong> {altura || "—"} cm</p>
             <p><strong>Largura:</strong> {largura || "—"} cm</p>
             <p><strong>Profundidade:</strong> {profundidade || "—"} cm</p>
             <p><strong>Gavetas:</strong> {gavetas || "—"}</p>
             <p><strong>Prateleiras:</strong> {prateleiras || "—"}</p>
-            <p><strong>Portas:</strong> {tipoPortas || "—"}</p>
-            <p><strong>LED:</strong> {led || "—"}</p>
-            <p><strong>Ficheiros do Artigo:</strong> {ficheirosArtigo.length}</p>
-            <p><strong>Outros Acessórios:</strong> {outrosAcessorios || "—"}</p>
+            <p><strong>Ficheiros:</strong> {ficheirosArtigo.length}</p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: "10px",
-              gap: "12px",
-            }}
-          >
-            <button
-              onClick={() => router.push("/novo-orcamento")}
-              style={botaoVoltarStyle}
-            >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+            <button onClick={() => router.push("/novo-orcamento-cliente")} style={botaoVoltarStyle}>
               Voltar
             </button>
 
-            <button
-              onClick={adicionarAoOrcamento}
-              style={botaoPrincipalStyle}
-            >
+            <button onClick={adicionarAoOrcamento} style={botaoPrincipalStyle}>
               {editarId ? "Atualizar Artigo" : "Adicionar ao Orçamento"}
             </button>
           </div>
@@ -702,27 +515,64 @@ export default function RoupeiroPage() {
   );
 }
 
-const menuStyle: React.CSSProperties = {
+const mainStyle: CSSProperties = {
+  minHeight: "100vh",
+  background: "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
+  color: "white",
+  display: "flex",
+  fontFamily: "Arial, sans-serif",
+};
+
+const asideStyle: CSSProperties = {
+  width: "260px",
+  minHeight: "100vh",
+  borderRight: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(0,0,0,0.12)",
+  padding: "30px 20px",
+};
+
+const logoStyle: CSSProperties = {
+  fontSize: "38px",
+  letterSpacing: "10px",
+  marginBottom: "40px",
+};
+
+const menuContainerStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+};
+
+const menuStyle: CSSProperties = {
+  width: "100%",
   padding: "14px 16px",
   borderRadius: "10px",
   background: "rgba(255,255,255,0.04)",
   color: "white",
-  textDecoration: "none",
+  border: "1px solid rgba(255,255,255,0.06)",
+  textAlign: "left",
+  fontWeight: "bold",
+  cursor: "pointer",
 };
 
-const labelStyle: React.CSSProperties = {
+const menuActiveStyle: CSSProperties = {
+  background: "rgba(92,115,199,0.35)",
+  border: "1px solid rgba(92,115,199,0.65)",
+};
+
+const labelStyle: CSSProperties = {
   display: "block",
   marginBottom: "8px",
 };
 
-const cardStyle: React.CSSProperties = {
+const cardStyle: CSSProperties = {
   padding: "24px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%",
   padding: "14px",
   borderRadius: "10px",
@@ -731,7 +581,36 @@ const inputStyle: React.CSSProperties = {
   color: "white",
 };
 
-const botaoPrincipalStyle: React.CSSProperties = {
+const grid2Style: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "16px",
+};
+
+const grid3Style: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "16px",
+};
+
+const grid4Style: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "16px",
+};
+
+const fileRowStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  padding: "12px 14px",
+  borderRadius: "10px",
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.06)",
+};
+
+const botaoPrincipalStyle: CSSProperties = {
   background: "linear-gradient(180deg, #4b5f9e 0%, #34457c 100%)",
   color: "white",
   border: "none",
@@ -742,7 +621,7 @@ const botaoPrincipalStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const botaoVoltarStyle: React.CSSProperties = {
+const botaoVoltarStyle: CSSProperties = {
   background: "rgba(255,255,255,0.08)",
   color: "white",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -753,7 +632,7 @@ const botaoVoltarStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const botaoRemoverStyle: React.CSSProperties = {
+const botaoRemoverStyle: CSSProperties = {
   background: "rgba(180,50,50,0.18)",
   color: "white",
   border: "1px solid rgba(180,50,50,0.35)",
