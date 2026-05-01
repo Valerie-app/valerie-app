@@ -24,6 +24,10 @@ type Processo = {
   dias_acabamento_previstos?: number | null;
   dias_montagem_previstos?: number | null;
   dias_totais_previstos?: number | null;
+  codigo_val: string | null;
+  caminho_dropbox: string | null;
+  estado_dropbox: string | null;
+  lote_atual: number | null;
 };
 
 type ExtraArtigo = {
@@ -291,6 +295,145 @@ export default function AdminDashboardPage() {
     }
   }
 
+  async function criarValParaProcesso(processo: Processo) {
+    try {
+      setMensagem("");
+
+      const res = await fetch("/api/criar-projeto", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nome_empresa: processo.nome_obra || "Sem nome",
+          nome_cliente: processo.nome_cliente || "Cliente",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        setMensagem("Erro ao criar VAL.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("processos")
+        .update({
+          codigo_val: data.codigo,
+          caminho_dropbox: data.caminho,
+          estado_dropbox: "orcamento",
+          lote_atual: 1,
+        })
+        .eq("id", processo.id);
+
+      if (error) throw error;
+
+      setMensagem(`VAL criado com sucesso: ${data.codigo}`);
+      await carregarDados(true);
+    } catch (error) {
+      console.error(error);
+      setMensagem("Erro ao criar VAL para o processo.");
+    }
+  }
+
+  async function criarNovoLote(processo: Processo) {
+    try {
+      setMensagem("");
+
+      if (!processo.codigo_val) {
+        setMensagem("Este processo ainda não tem VAL.");
+        return;
+      }
+
+      const res = await fetch("/api/criar-lote", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          codigo_val: processo.codigo_val,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        setMensagem("Erro ao criar novo lote.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("processos")
+        .update({
+          lote_atual: data.lote,
+        })
+        .eq("id", processo.id);
+
+      if (error) throw error;
+
+      setMensagem(`${data.nome_lote} criado com sucesso.`);
+      await carregarDados(true);
+    } catch (error) {
+      console.error(error);
+      setMensagem("Erro ao criar novo lote.");
+    }
+  }
+
+  async function aprovarOrcamentoDropbox(processo: Processo) {
+    try {
+      setMensagem("");
+
+      if (!processo.codigo_val) {
+        setMensagem("Este processo ainda não tem VAL.");
+        return;
+      }
+
+      const res = await fetch("/api/aprovar-orcamento", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          codigo_val: processo.codigo_val,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        setMensagem("Erro ao mover para Encomendas.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("processos")
+        .update({
+          caminho_dropbox: data.caminho_novo,
+          estado_dropbox: "encomenda",
+          estado: "Validado",
+        })
+        .eq("id", processo.id);
+
+      if (error) throw error;
+
+      setMensagem("Processo aprovado e movido para Encomendas.");
+      await carregarDados(true);
+    } catch (error) {
+      console.error(error);
+      setMensagem("Erro ao aprovar orçamento.");
+    }
+  }
+
+  function abrirPastaDropbox(caminho: string | null) {
+    if (!caminho) {
+      setMensagem("Este processo ainda não tem pasta Dropbox.");
+      return;
+    }
+
+    window.open(`https://www.dropbox.com/home${caminho}`, "_blank");
+  }
+
   function limparFiltros() {
     setPesquisa("");
     setFiltroEstado("Todos");
@@ -399,13 +542,15 @@ export default function AdminDashboardPage() {
         const localizacao = (processo.localizacao || "").toLowerCase();
         const estado = (processo.estado || "").toLowerCase();
         const observacoes = (processo.observacoes || "").toLowerCase();
+        const codigoVal = (processo.codigo_val || "").toLowerCase();
 
         return (
           nomeObra.includes(termo) ||
           nomeCliente.includes(termo) ||
           localizacao.includes(termo) ||
           estado.includes(termo) ||
-          observacoes.includes(termo)
+          observacoes.includes(termo) ||
+          codigoVal.includes(termo)
         );
       });
     }
@@ -681,7 +826,7 @@ export default function AdminDashboardPage() {
               <input
                 value={pesquisa}
                 onChange={(e) => setPesquisa(e.target.value)}
-                placeholder="Pesquisar por obra, cliente, localização, estado ou observações"
+                placeholder="Pesquisar por obra, cliente, localização, estado, VAL ou observações"
                 style={inputPesquisaStyle}
               />
 
@@ -833,6 +978,66 @@ export default function AdminDashboardPage() {
                           <div style={subtextoStyle}>
                             Artigos associados: {artigosDoProcesso.length}
                           </div>
+
+                          <div style={subtextoStyle}>
+                            <strong>VAL:</strong>{" "}
+                            {processo.codigo_val || "Ainda não criado"}{" "}
+                            {processo.codigo_val && (
+                              <>
+                                | <strong>Lote atual:</strong>{" "}
+                                {processo.lote_atual || 1} |{" "}
+                                <strong>Dropbox:</strong>{" "}
+                                {processo.estado_dropbox || "orcamento"}
+                              </>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "8px",
+                              flexWrap: "wrap",
+                              marginTop: "8px",
+                            }}
+                          >
+                            {!processo.codigo_val ? (
+                              <button
+                                type="button"
+                                onClick={() => criarValParaProcesso(processo)}
+                                style={botaoLinkStyle}
+                              >
+                                Criar VAL
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => abrirPastaDropbox(processo.caminho_dropbox)}
+                                  style={botaoSecundarioStyle}
+                                >
+                                  Abrir Pasta
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => criarNovoLote(processo)}
+                                  style={botaoSecundarioStyle}
+                                >
+                                  Novo Lote
+                                </button>
+
+                                {processo.estado_dropbox !== "encomenda" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => aprovarOrcamentoDropbox(processo)}
+                                    style={botaoLinkStyle}
+                                  >
+                                    Aprovar Dropbox
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         <div style={{ width: eDesktop ? "auto" : "100%" }}>
@@ -888,6 +1093,18 @@ export default function AdminDashboardPage() {
                               <p>
                                 <strong>Estado:</strong>{" "}
                                 {processo.estado || "—"}
+                              </p>
+                              <p>
+                                <strong>VAL:</strong>{" "}
+                                {processo.codigo_val || "Ainda não criado"}
+                              </p>
+                              <p>
+                                <strong>Estado Dropbox:</strong>{" "}
+                                {processo.estado_dropbox || "sem_val"}
+                              </p>
+                              <p>
+                                <strong>Lote atual:</strong>{" "}
+                                {processo.lote_atual || 1}
                               </p>
                               <p>
                                 <strong>Data de criação:</strong>{" "}

@@ -24,6 +24,11 @@ type Processo = {
   dias_totais_previstos?: number | null;
   data_entrega_prevista?: string | null;
   created_at: string | null;
+
+  codigo_val: string | null;
+  caminho_dropbox: string | null;
+  estado_dropbox: string | null;
+  lote_atual: number | null;
 };
 
 type ExtraArtigo = {
@@ -357,6 +362,244 @@ export default function AdminProcessosPage() {
     }
   }
 
+  async function criarValParaProcesso(processo: Processo) {
+    try {
+      setProcessoEmAcao(processo.id);
+      limparMensagem();
+
+      const res = await fetch("/api/criar-projeto", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nome_empresa: processo.nome_obra || "Sem nome",
+          nome_cliente: processo.nome_cliente || "Cliente",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        mostrarMensagem(data.erro || "Erro ao criar VAL.", "erro");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("processos")
+        .update({
+          codigo_val: data.codigo,
+          caminho_dropbox: data.caminho,
+          estado_dropbox: "orcamento",
+          lote_atual: 1,
+        })
+        .eq("id", processo.id);
+
+      if (error) throw error;
+
+      setProcessos((prev) =>
+        prev.map((p) =>
+          p.id === processo.id
+            ? {
+                ...p,
+                codigo_val: data.codigo,
+                caminho_dropbox: data.caminho,
+                estado_dropbox: "orcamento",
+                lote_atual: 1,
+              }
+            : p
+        )
+      );
+
+      mostrarMensagem(`VAL criado com sucesso: ${data.codigo}`, "sucesso");
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem("Erro ao criar VAL para o processo.", "erro");
+    } finally {
+      setProcessoEmAcao(null);
+    }
+  }
+
+  async function criarNovoLote(processo: Processo) {
+    try {
+      setProcessoEmAcao(processo.id);
+      limparMensagem();
+
+      if (!processo.codigo_val) {
+        mostrarMensagem("Este processo ainda não tem VAL.", "erro");
+        return;
+      }
+
+      const res = await fetch("/api/criar-lote", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          codigo_val: processo.codigo_val,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        mostrarMensagem(data.erro || "Erro ao criar novo lote.", "erro");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("processos")
+        .update({
+          lote_atual: data.lote,
+        })
+        .eq("id", processo.id);
+
+      if (error) throw error;
+
+      setProcessos((prev) =>
+        prev.map((p) =>
+          p.id === processo.id
+            ? {
+                ...p,
+                lote_atual: data.lote,
+              }
+            : p
+        )
+      );
+
+      mostrarMensagem(`${data.nome_lote} criado com sucesso.`, "sucesso");
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem("Erro ao criar novo lote.", "erro");
+    } finally {
+      setProcessoEmAcao(null);
+    }
+  }
+
+  async function aprovarOrcamentoDropbox(processo: Processo) {
+    try {
+      setProcessoEmAcao(processo.id);
+      limparMensagem();
+
+      if (!processo.codigo_val) {
+        mostrarMensagem("Este processo ainda não tem VAL.", "erro");
+        return;
+      }
+
+      const res = await fetch("/api/aprovar-orcamento", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          codigo_val: processo.codigo_val,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        mostrarMensagem(data.erro || "Erro ao mover para Encomendas.", "erro");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("processos")
+        .update({
+          caminho_dropbox: data.caminho_novo,
+          estado_dropbox: "encomenda",
+          estado: "Validado",
+        })
+        .eq("id", processo.id);
+
+      if (error) throw error;
+
+      setProcessos((prev) =>
+        prev.map((p) =>
+          p.id === processo.id
+            ? {
+                ...p,
+                caminho_dropbox: data.caminho_novo,
+                estado_dropbox: "encomenda",
+                estado: "Validado",
+              }
+            : p
+        )
+      );
+
+      mostrarMensagem("Processo aprovado e movido para Encomendas.", "sucesso");
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem("Erro ao aprovar orçamento.", "erro");
+    } finally {
+      setProcessoEmAcao(null);
+    }
+  }
+
+  function abrirPastaDropbox(caminho: string | null) {
+    if (!caminho) {
+      mostrarMensagem("Este processo ainda não tem pasta Dropbox.", "erro");
+      return;
+    }
+
+    window.open(`https://www.dropbox.com/home${caminho}`, "_blank");
+  }
+
+  async function uploadFicheiroProcesso(processo: Processo, file: File) {
+    try {
+      setProcessoEmAcao(processo.id);
+      limparMensagem();
+
+      if (!processo.codigo_val) {
+        mostrarMensagem("Este processo ainda não tem VAL.", "erro");
+        return;
+      }
+
+      const base64 = await fileToBase64(file);
+
+      const res = await fetch("/api/upload-ficheiro", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          codigo_val: processo.codigo_val,
+          lote: processo.lote_atual || 1,
+          nome_ficheiro: file.name,
+          ficheiro_base64: base64,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        mostrarMensagem(data.erro || "Erro ao enviar ficheiro.", "erro");
+        return;
+      }
+
+      mostrarMensagem(
+        `Ficheiro enviado para ${processo.codigo_val} / Lote ${processo.lote_atual || 1}.`,
+        "sucesso"
+      );
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem("Erro ao enviar ficheiro.", "erro");
+    } finally {
+      setProcessoEmAcao(null);
+    }
+  }
+
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = reject;
+
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function recalcularProcesso(processo: Processo) {
     try {
       setProcessoEmAcao(processo.id);
@@ -485,7 +728,8 @@ export default function AdminProcessosPage() {
         normalizarTexto(p.nome_cliente).includes(termo) ||
         normalizarTexto(p.nome_obra).includes(termo) ||
         normalizarTexto(p.localizacao).includes(termo) ||
-        normalizarTexto(p.estado).includes(termo);
+        normalizarTexto(p.estado).includes(termo) ||
+        normalizarTexto(p.codigo_val).includes(termo);
 
       const passaEstado = filtroEstado === "Todos" || p.estado === filtroEstado;
 
@@ -543,7 +787,7 @@ export default function AdminProcessosPage() {
           <input
             value={pesquisa}
             onChange={(e) => setPesquisa(e.target.value)}
-            placeholder="Pesquisar cliente, obra, local ou estado"
+            placeholder="Pesquisar cliente, obra, local, estado ou VAL"
             style={inputStyle}
           />
 
@@ -605,6 +849,18 @@ export default function AdminProcessosPage() {
                         <p style={subtextoStyle}>Cliente: {processo.nome_cliente || "—"}</p>
                         <p style={subtextoStyle}>Localização: {processo.localizacao || "—"}</p>
                         <p style={subtextoStyle}>Criado em: {formatarData(processo.created_at)}</p>
+
+                        <p style={subtextoStyle}>
+                          <strong>VAL:</strong>{" "}
+                          {processo.codigo_val || "Ainda não criado"}
+                          {processo.codigo_val && (
+                            <>
+                              {" "} | <strong>Lote atual:</strong> {processo.lote_atual || 1}
+                              {" "} | <strong>Dropbox:</strong> {processo.estado_dropbox || "orcamento"}
+                            </>
+                          )}
+                        </p>
+
                         <span style={badgeStyle}>{processo.estado || "Sem estado"}</span>
                       </div>
 
@@ -615,6 +871,59 @@ export default function AdminProcessosPage() {
                         >
                           {aberto ? "Fechar" : "Abrir"}
                         </button>
+
+                        {!processo.codigo_val ? (
+                          <button
+                            onClick={() => criarValParaProcesso(processo)}
+                            style={botaoPrincipalStyle}
+                            disabled={processoEmAcao === processo.id}
+                          >
+                            Criar VAL
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => abrirPastaDropbox(processo.caminho_dropbox)}
+                              style={botaoSecundarioStyle}
+                            >
+                              Abrir Pasta
+                            </button>
+
+                            <button
+                              onClick={() => criarNovoLote(processo)}
+                              style={botaoSecundarioStyle}
+                              disabled={processoEmAcao === processo.id}
+                            >
+                              Novo Lote
+                            </button>
+
+                            <label style={botaoSecundarioStyle}>
+                              Upload Ficheiro
+                              <input
+                                type="file"
+                                style={{ display: "none" }}
+                                disabled={processoEmAcao === processo.id}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+
+                                  void uploadFicheiroProcesso(processo, file);
+                                  e.currentTarget.value = "";
+                                }}
+                              />
+                            </label>
+
+                            {processo.estado_dropbox !== "encomenda" && (
+                              <button
+                                onClick={() => aprovarOrcamentoDropbox(processo)}
+                                style={botaoAprovarStyle}
+                                disabled={processoEmAcao === processo.id}
+                              >
+                                Aprovar Dropbox
+                              </button>
+                            )}
+                          </>
+                        )}
 
                         <button
                           onClick={() => recalcularProcesso(processo)}
@@ -674,6 +983,9 @@ export default function AdminProcessosPage() {
                         <h3>Detalhe</h3>
 
                         <p><strong>Observações:</strong> {processo.observacoes || "—"}</p>
+                        <p><strong>VAL:</strong> {processo.codigo_val || "Ainda não criado"}</p>
+                        <p><strong>Estado Dropbox:</strong> {processo.estado_dropbox || "sem_val"}</p>
+                        <p><strong>Lote atual:</strong> {processo.lote_atual || 1}</p>
                         <p><strong>Estimativa base:</strong> {formatarMoeda(processo.valor_estimado)}</p>
                         <p><strong>Desconto:</strong> {Number(processo.desconto_percentual || 0).toFixed(2)}%</p>
                         <p><strong>Estimativa com desconto:</strong> {formatarMoeda(processo.valor_estimado_com_desconto)}</p>
