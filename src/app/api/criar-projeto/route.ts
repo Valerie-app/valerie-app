@@ -3,7 +3,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL}/criar-projeto-dropbox`,
+      "https://sjqvbfaknsaldhxgys.supabase.co/functions/v1/criar-projeto-dropbox",
       {
         method: "POST",
         headers: {

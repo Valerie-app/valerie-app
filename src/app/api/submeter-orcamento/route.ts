@@ -48,6 +48,7 @@ function converterParaMetros(valor: number) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const origem = new URL(req.url).origin;
 
     const clienteId = body.clienteId || body.cliente_id || null;
     const nomeCliente = body.nomeCliente || body.nome_cliente || null;
@@ -158,7 +159,6 @@ export async function POST(req: Request) {
 
     for (const artigo of artigos) {
       const dados = obterDadosArtigo(artigo);
-
       const area = Number(dados.largura || 0) * Number(dados.altura || 0);
 
       const precoTipo = getPreco(artigo.tipo);
@@ -207,11 +207,42 @@ export async function POST(req: Request) {
         dias_montagem_previstos: prazo.diasMontagem,
         dias_totais_previstos: prazo.diasTotais,
         data_entrega_prevista: prazo.dataEntregaPrevista,
+        estado_dropbox: "sem_val",
+        lote_atual: 1,
       })
       .select("id")
       .single();
 
     if (erroProcesso || !processo) throw erroProcesso;
+
+    const resVal = await fetch(`${origem}/api/criar-projeto`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        nome_empresa: nomeObra || "Sem nome",
+        nome_cliente: nomeCliente || cliente?.nome || "Cliente",
+      }),
+    });
+
+    const dataVal = await resVal.json();
+
+    if (!dataVal.sucesso) {
+      throw new Error(dataVal.erro || "Erro ao criar VAL automaticamente.");
+    }
+
+    const { error: erroAtualizarVal } = await supabase
+      .from("processos")
+      .update({
+        codigo_val: dataVal.codigo,
+        caminho_dropbox: dataVal.caminho,
+        estado_dropbox: "orcamento",
+        lote_atual: 1,
+      })
+      .eq("id", processo.id);
+
+    if (erroAtualizarVal) throw erroAtualizarVal;
 
     const artigosParaInserir = artigos.map((artigo) => {
       const dados = obterDadosArtigo(artigo);
@@ -233,8 +264,12 @@ export async function POST(req: Request) {
 
     return Response.json({
       success: true,
-      message: "Pedido submetido com sucesso.",
+      sucesso: true,
+      message: "Pedido submetido com sucesso e VAL criado automaticamente.",
       processoId: processo.id,
+      codigo_val: dataVal.codigo,
+      caminho_dropbox: dataVal.caminho,
+      lote_atual: 1,
       total,
       totalComDesconto,
       prazo,
@@ -245,6 +280,7 @@ export async function POST(req: Request) {
     return Response.json(
       {
         success: false,
+        sucesso: false,
         error: error?.message || "Erro ao submeter orçamento.",
       },
       { status: 500 }
