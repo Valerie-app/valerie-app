@@ -337,6 +337,81 @@ export default function AdminProcessosPage() {
     return (obterLucro(processo) / valor) * 100;
   }
 
+  function obterUrlProducao(processo: Processo) {
+    if (!processo.codigo_val) return "";
+
+    const params = new URLSearchParams({
+      codigo_val: processo.codigo_val,
+      lote: String(processo.lote_atual || 1),
+    });
+
+    return `/producao?${params.toString()}`;
+  }
+
+  function abrirProducao(processo: Processo) {
+    if (!processo.codigo_val) {
+      mostrarMensagem("Este processo ainda não tem VAL.", "erro");
+      return;
+    }
+
+    window.open(obterUrlProducao(processo), "_blank");
+  }
+
+  async function copiarLinkProducao(processo: Processo) {
+    try {
+      if (!processo.codigo_val) {
+        mostrarMensagem("Este processo ainda não tem VAL.", "erro");
+        return;
+      }
+
+      const urlRelativa = obterUrlProducao(processo);
+      const urlCompleta = `${window.location.origin}${urlRelativa}`;
+
+      await navigator.clipboard.writeText(urlCompleta);
+      mostrarMensagem("Link/QR da produção copiado com sucesso.", "sucesso");
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem("Erro ao copiar link da produção.", "erro");
+    }
+  }
+
+  async function gerarQRArtigos(processo: Processo) {
+    try {
+      setProcessoEmAcao(processo.id);
+      limparMensagem();
+
+      if (!processo.codigo_val) {
+        mostrarMensagem("Este processo ainda não tem VAL.", "erro");
+        return;
+      }
+
+      const res = await fetch("/api/gerar-qr-artigos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          codigo_val: processo.codigo_val,
+          lote: processo.lote_atual || 1,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.sucesso) {
+        mostrarMensagem(data.erro || "Erro ao gerar QR dos artigos.", "erro");
+        return;
+      }
+
+      mostrarMensagem(`QR dos artigos criados com sucesso (${data.total || 0}).`, "sucesso");
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem("Erro ao gerar QR dos artigos.", "erro");
+    } finally {
+      setProcessoEmAcao(null);
+    }
+  }
+
   async function atualizarEstado(processoId: string, estado: string) {
     try {
       setProcessoEmAcao(processoId);
@@ -760,6 +835,7 @@ export default function AdminProcessosPage() {
           <a href="/admin/precos" style={menuStyle}>Preços</a>
           <a href="/admin/financeiro" style={menuStyle}>Financeiro</a>
           <a href="/admin/calendario" style={menuStyle}>Calendário</a>
+          <a href="/admin/operadores" style={menuStyle}>Operadores</a>
           <a href="/aprovacao-clientes" style={menuStyle}>Aprovação Clientes</a>
         </div>
 
@@ -840,6 +916,7 @@ export default function AdminProcessosPage() {
                 const custo = obterCustoEfetivo(processo);
                 const lucro = obterLucro(processo);
                 const margem = obterMargem(processo);
+                const urlProducao = obterUrlProducao(processo);
 
                 return (
                   <div key={processo.id} style={linhaStyle}>
@@ -860,6 +937,15 @@ export default function AdminProcessosPage() {
                             </>
                           )}
                         </p>
+
+                        {processo.codigo_val && (
+                          <p style={subtextoStyle}>
+                            <strong>QR Produção:</strong>{" "}
+                            <a href={urlProducao} target="_blank" style={linkInlineStyle}>
+                              Abrir folha de tempos
+                            </a>
+                          </p>
+                        )}
 
                         <span style={badgeStyle}>{processo.estado || "Sem estado"}</span>
                       </div>
@@ -895,6 +981,30 @@ export default function AdminProcessosPage() {
                               disabled={processoEmAcao === processo.id}
                             >
                               Novo Lote
+                            </button>
+
+                            <button
+                              onClick={() => abrirProducao(processo)}
+                              style={botaoProducaoStyle}
+                              disabled={processoEmAcao === processo.id}
+                            >
+                              QR Produção
+                            </button>
+
+                            <button
+                              onClick={() => copiarLinkProducao(processo)}
+                              style={botaoSecundarioStyle}
+                              disabled={processoEmAcao === processo.id}
+                            >
+                              Copiar Link QR
+                            </button>
+
+                            <button
+                              onClick={() => gerarQRArtigos(processo)}
+                              style={botaoPrincipalStyle}
+                              disabled={processoEmAcao === processo.id}
+                            >
+                              Gerar QR Artigos
                             </button>
 
                             <label style={botaoSecundarioStyle}>
@@ -986,6 +1096,42 @@ export default function AdminProcessosPage() {
                         <p><strong>VAL:</strong> {processo.codigo_val || "Ainda não criado"}</p>
                         <p><strong>Estado Dropbox:</strong> {processo.estado_dropbox || "sem_val"}</p>
                         <p><strong>Lote atual:</strong> {processo.lote_atual || 1}</p>
+
+                        {processo.codigo_val && (
+                          <div style={qrInfoBoxStyle}>
+                            <strong>Produção / QR Code</strong>
+                            <p style={{ marginTop: 8, marginBottom: 10 }}>
+                              Link da folha de tempos para este VAL e lote:
+                            </p>
+                            <a href={urlProducao} target="_blank" style={linkInlineStyle}>
+                              {urlProducao}
+                            </a>
+                            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                onClick={() => abrirProducao(processo)}
+                                style={botaoProducaoStyle}
+                              >
+                                Abrir QR Produção
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copiarLinkProducao(processo)}
+                                style={botaoSecundarioStyle}
+                              >
+                                Copiar Link
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => gerarQRArtigos(processo)}
+                                style={botaoPrincipalStyle}
+                              >
+                                Gerar QR Artigos
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <p><strong>Estimativa base:</strong> {formatarMoeda(processo.valor_estimado)}</p>
                         <p><strong>Desconto:</strong> {Number(processo.desconto_percentual || 0).toFixed(2)}%</p>
                         <p><strong>Estimativa com desconto:</strong> {formatarMoeda(processo.valor_estimado_com_desconto)}</p>
@@ -1262,6 +1408,22 @@ const artigoStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.06)",
 };
 
+const qrInfoBoxStyle: CSSProperties = {
+  marginTop: 14,
+  marginBottom: 18,
+  padding: 14,
+  borderRadius: 12,
+  background: "rgba(92,115,199,0.16)",
+  border: "1px solid rgba(92,115,199,0.40)",
+};
+
+const linkInlineStyle: CSSProperties = {
+  color: "#9fc3ff",
+  fontWeight: "bold",
+  textDecoration: "underline",
+  wordBreak: "break-all",
+};
+
 const calculoBoxStyle: CSSProperties = {
   display: "grid",
   gap: 8,
@@ -1332,6 +1494,16 @@ const botaoPrincipalStyle: CSSProperties = {
   border: "none",
   borderRadius: 10,
   padding: "12px 16px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botaoProducaoStyle: CSSProperties = {
+  background: "rgba(92,115,199,0.34)",
+  color: "white",
+  border: "1px solid rgba(157,195,255,0.45)",
+  borderRadius: 10,
+  padding: "10px 14px",
   fontWeight: "bold",
   cursor: "pointer",
 };

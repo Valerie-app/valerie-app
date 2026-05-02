@@ -38,7 +38,7 @@ export default function ProcessoDetalhePage() {
       },
       {
         data: dataFormatada,
-        texto: `Email enviado para a contabilidade para emissão da fatura proforma às ${horaFormatada}`,
+        texto: `Email enviado para a contabilidade às ${horaFormatada}`,
       },
     ]);
 
@@ -52,299 +52,182 @@ export default function ProcessoDetalhePage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
-        color: "white",
-        display: "flex",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <aside
-        style={{
-          width: "260px",
-          minHeight: "100vh",
-          borderRight: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(0,0,0,0.12)",
-          padding: "30px 20px",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "38px",
-            letterSpacing: "10px",
-            marginBottom: "40px",
-          }}
-        >
-          VALERIE
-        </div>
+    <main style={mainStyle}>
+      <aside style={asideStyle}>
+        <div style={logoStyle}>VALERIE</div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <a
-            href="/"
-            style={{
-              padding: "14px 16px",
-              borderRadius: "10px",
-              background: "rgba(255,255,255,0.04)",
-              color: "white",
-              textDecoration: "none",
-            }}
-          >
-            Dashboard
-          </a>
-
-          <a
-            href="/novo-orcamento"
-            style={{
-              padding: "14px 16px",
-              borderRadius: "10px",
-              background: "rgba(255,255,255,0.04)",
-              color: "white",
-              textDecoration: "none",
-            }}
-          >
-            Novo Orçamento
-          </a>
-
-          <a
-            href="/processos"
-            style={{
-              padding: "14px 16px",
-              borderRadius: "10px",
-              background: "rgba(255,255,255,0.08)",
-              color: "white",
-              textDecoration: "none",
-            }}
-          >
-            Os Meus Processos
-          </a>
-
-          <a
-            href="/documentos"
-            style={{
-              padding: "14px 16px",
-              borderRadius: "10px",
-              background: "rgba(255,255,255,0.04)",
-              color: "white",
-              textDecoration: "none",
-            }}
-          >
-            Documentos
-          </a>
-
-          <a
-            href="/mensagens"
-            style={{
-              padding: "14px 16px",
-              borderRadius: "10px",
-              background: "rgba(255,255,255,0.04)",
-              color: "white",
-              textDecoration: "none",
-            }}
-          >
-            Mensagens
-          </a>
-
-          <a
-            href="/perfil"
-            style={{
-              padding: "14px 16px",
-              borderRadius: "10px",
-              background: "rgba(255,255,255,0.04)",
-              color: "white",
-              textDecoration: "none",
-            }}
-          >
-            Perfil
-          </a>
+        <div style={menuStyle}>
+          <a href="/dashboard-cliente" style={linkStyle}>Dashboard</a>
+          <a href="/novo-orcamento-cliente" style={linkStyle}>Novo Orçamento</a>
+          <a href="/processos-cliente" style={linkActiveStyle}>Processos</a>
+          <a href="#" style={linkStyle}>Documentos</a>
+          <a href="#" style={linkStyle}>Mensagens</a>
+          <a href="/perfil-cliente" style={linkStyle}>Perfil</a>
         </div>
       </aside>
 
-      <section style={{ flex: 1, padding: "40px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: "30px",
-          }}
-        >
+      <section style={contentStyle}>
+        <div style={topoStyle}>
           <div>
-            <h1 style={{ fontSize: "38px", margin: 0 }}>Moradia Vila Verde</h1>
-            <p style={{ opacity: 0.8, marginTop: "10px" }}>
-              Processo PR-1351 • Braga
-            </p>
+            <h1 style={{ margin: 0 }}>Moradia Vila Verde</h1>
+            <p style={{ opacity: 0.8 }}>Processo PR-1351 • Braga</p>
           </div>
 
           {estado !== "Validado" ? (
-            <button
-              onClick={validarOrcamento}
-              style={{
-                background: "#3fa36b",
-                color: "white",
-                border: "none",
-                borderRadius: "10px",
-                padding: "14px 20px",
-                fontWeight: "bold",
-                fontSize: "16px",
-              }}
-            >
+            <button onClick={validarOrcamento} style={botaoValidarStyle}>
               ✔ Validar Orçamento
             </button>
           ) : (
-            <div
-              style={{
-                background: "rgba(63, 163, 107, 0.2)",
-                color: "#c8f5d8",
-                padding: "14px 18px",
-                borderRadius: "10px",
-                fontWeight: "bold",
-              }}
-            >
-              Orçamento Validado
-            </div>
+            <div style={estadoValidadoStyle}>Orçamento Validado</div>
           )}
         </div>
 
-        {mensagem && (
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "16px 18px",
-              borderRadius: "12px",
-              background: "rgba(63, 163, 107, 0.15)",
-              border: "1px solid rgba(63, 163, 107, 0.3)",
-              color: "#dff7e7",
-            }}
-          >
-            {mensagem}
-          </div>
-        )}
+        {mensagem && <div style={mensagemStyle}>{mensagem}</div>}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.3fr 1fr",
-            gap: "20px",
-            marginBottom: "20px",
-          }}
-        >
-          <div
-            style={{
-              padding: "24px",
-              borderRadius: "16px",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Resumo do Processo</h2>
-            <p>
-              <strong>Estado:</strong> {estado}
-            </p>
-            <p>
-              <strong>Data da submissão:</strong> 27/04/2024
-            </p>
-            <p>
-              <strong>Número de artigos:</strong> 3
-            </p>
+        <div style={gridStyle}>
+          <div style={cardStyle}>
+            <h2>Resumo</h2>
+            <p><strong>Estado:</strong> {estado}</p>
+            <p><strong>Data:</strong> 27/04/2024</p>
+            <p><strong>Artigos:</strong> 3</p>
           </div>
 
-          <div
-            style={{
-              padding: "24px",
-              borderRadius: "16px",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Documentos Disponíveis</h2>
+          <div style={cardStyle}>
+            <h2>Documentos</h2>
             <p>Orçamento_1351.pdf</p>
-
-            <button
-              style={{
-                marginTop: "10px",
-                background: "rgba(255,255,255,0.08)",
-                color: "white",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: "10px",
-                padding: "10px 14px",
-              }}
-            >
-              Ver Orçamento
-            </button>
+            <button style={botaoSecundarioStyle}>Ver Orçamento</button>
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "20px",
-            marginBottom: "20px",
-          }}
-        >
-          <div
-            style={{
-              padding: "24px",
-              borderRadius: "16px",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Artigos do Pedido</h2>
+        <div style={gridStyle}>
+          <div style={cardStyle}>
+            <h2>Artigos</h2>
             <p>Roupeiro — 250 x 300 x 60 cm</p>
             <p>Móvel TV — 200 x 45 cm</p>
             <p>Móvel WC — 100 x 50 cm</p>
           </div>
 
-          <div
-            style={{
-              padding: "24px",
-              borderRadius: "16px",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Próxima Etapa</h2>
-            <p style={{ opacity: 0.85 }}>
-              Após a validação do orçamento, a equipa será notificada para emissão
-              da fatura proforma e seguimento do processo.
+          <div style={cardStyle}>
+            <h2>Próxima Etapa</h2>
+            <p style={{ opacity: 0.8 }}>
+              Após validação, será emitida a fatura proforma.
             </p>
           </div>
         </div>
 
-        <div
-          style={{
-            padding: "24px",
-            borderRadius: "16px",
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Histórico do Processo</h2>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {historico.map((evento, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: "14px 16px",
-                  borderRadius: "10px",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                }}
-              >
-                <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                  {evento.texto}
-                </div>
-                <div style={{ opacity: 0.7, fontSize: "14px" }}>{evento.data}</div>
-              </div>
-            ))}
-          </div>
+        <div style={cardStyle}>
+          <h2>Histórico</h2>
+          {historico.map((evento, i) => (
+            <div key={i} style={historicoItemStyle}>
+              <strong>{evento.texto}</strong>
+              <div style={{ opacity: 0.7 }}>{evento.data}</div>
+            </div>
+          ))}
         </div>
       </section>
     </main>
   );
 }
+
+/* STYLES */
+
+const mainStyle = {
+  minHeight: "100vh",
+  display: "flex",
+  background: "#1f2540",
+  color: "white",
+  fontFamily: "Arial",
+};
+
+const asideStyle = {
+  width: "260px",
+  padding: "30px 20px",
+  background: "rgba(0,0,0,0.2)",
+};
+
+const logoStyle = {
+  fontSize: "32px",
+  marginBottom: "30px",
+};
+
+const menuStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: "10px",
+};
+
+const linkStyle = {
+  padding: "12px",
+  borderRadius: "8px",
+  background: "rgba(255,255,255,0.05)",
+  color: "white",
+  textDecoration: "none",
+};
+
+const linkActiveStyle = {
+  ...linkStyle,
+  background: "rgba(255,255,255,0.1)",
+};
+
+const contentStyle = {
+  flex: 1,
+  padding: "40px",
+};
+
+const topoStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  marginBottom: "20px",
+};
+
+const gridStyle = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "20px",
+  marginBottom: "20px",
+};
+
+const cardStyle = {
+  padding: "20px",
+  borderRadius: "12px",
+  background: "rgba(255,255,255,0.05)",
+};
+
+const botaoValidarStyle = {
+  background: "#3fa36b",
+  color: "white",
+  border: "none",
+  padding: "12px 16px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};
+
+const estadoValidadoStyle = {
+  background: "rgba(63,163,107,0.2)",
+  padding: "12px",
+  borderRadius: "8px",
+};
+
+const mensagemStyle = {
+  marginBottom: "20px",
+  padding: "12px",
+  background: "rgba(63,163,107,0.2)",
+  borderRadius: "8px",
+};
+
+const historicoItemStyle = {
+  padding: "10px",
+  marginTop: "10px",
+  background: "rgba(255,255,255,0.05)",
+  borderRadius: "8px",
+};
+
+const botaoSecundarioStyle = {
+  marginTop: "10px",
+  background: "rgba(255,255,255,0.1)",
+  color: "white",
+  border: "none",
+  padding: "10px",
+  borderRadius: "8px",
+  cursor: "pointer",
+};

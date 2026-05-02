@@ -107,7 +107,7 @@ export default function LoginPage() {
           return;
         }
 
-        router.replace("/dashboard");
+        router.replace("/dashboard-cliente");
       } catch (error) {
         console.error(error);
       } finally {
@@ -115,7 +115,7 @@ export default function LoginPage() {
       }
     }
 
-    verificarSessao();
+    void verificarSessao();
   }, [router]);
 
   function limparMensagem() {
@@ -232,7 +232,7 @@ export default function LoginPage() {
       if (cliente.tipo_utilizador === "admin") {
         router.replace("/admin");
       } else {
-        router.replace("/dashboard");
+        router.replace("/dashboard-cliente");
       }
     } catch (error: any) {
       console.error(error);

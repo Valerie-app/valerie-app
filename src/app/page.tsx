@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function HomePage() {
   const router = useRouter();
+  const [aVerificar, setAVerificar] = useState(true);
 
   useEffect(() => {
     async function verificar() {
@@ -27,30 +28,68 @@ export default function HomePage() {
 
         const { data: cliente, error: clienteError } = await supabase
           .from("clientes")
-          .select("tipo_utilizador")
+          .select("tipo_utilizador, aprovado, estado")
           .eq("id", user.id)
-          .single<{ tipo_utilizador: string | null }>();
+          .maybeSingle<{
+            tipo_utilizador: string | null;
+            aprovado: boolean | null;
+            estado: string | null;
+          }>();
 
-        if (clienteError) {
+        if (clienteError || !cliente) {
           console.error(clienteError);
           router.replace("/login");
           return;
         }
 
-        if (cliente?.tipo_utilizador === "admin") {
+        if (cliente.tipo_utilizador === "admin") {
           router.replace("/admin");
           return;
         }
 
-        router.replace("/dashboard");
+        if (cliente.tipo_utilizador === "cliente") {
+          if (cliente.aprovado === false || cliente.estado === "pendente") {
+            router.replace("/aguardar-aprovacao");
+            return;
+          }
+
+          if (cliente.estado === "rejeitado") {
+            router.replace("/login");
+            return;
+          }
+
+          router.replace("/dashboard-cliente");
+          return;
+        }
+
+        router.replace("/login");
       } catch (error) {
         console.error(error);
         router.replace("/login");
+      } finally {
+        setAVerificar(false);
       }
     }
 
-    verificar();
+    void verificar();
   }, [router]);
+
+  if (aVerificar) {
+    return (
+      <main
+        style={{
+          minHeight: "100dvh",
+          display: "grid",
+          placeItems: "center",
+          background: "#1f2540",
+          color: "white",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        A entrar...
+      </main>
+    );
+  }
 
   return null;
 }
