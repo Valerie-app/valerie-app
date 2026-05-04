@@ -30,6 +30,9 @@ type ArtigoPedido = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+const criarProjetoDropboxUrl =
+  "https://sjqvbfaknsaldhxhgys.supabase.co/functions/v1/criar-projeto-dropbox";
+
 if (!supabaseUrl) throw new Error("NEXT_PUBLIC_SUPABASE_URL não definida.");
 if (!serviceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY não definida.");
 
@@ -48,7 +51,6 @@ function converterParaMetros(valor: number) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const origem = new URL(req.url).origin;
 
     const clienteId = body.clienteId || body.cliente_id || null;
     const nomeCliente = body.nomeCliente || body.nome_cliente || null;
@@ -59,21 +61,25 @@ export async function POST(req: Request) {
 
     if (!clienteId) {
       return Response.json(
-        { success: false, error: "Cliente não identificado." },
+        { success: false, sucesso: false, error: "Cliente não identificado." },
         { status: 400 }
       );
     }
 
     if (!nomeObra || !String(nomeObra).trim()) {
       return Response.json(
-        { success: false, error: "Preencha o nome da obra." },
+        { success: false, sucesso: false, error: "Preencha o nome da obra." },
         { status: 400 }
       );
     }
 
     if (!artigos.length) {
       return Response.json(
-        { success: false, error: "Adicione pelo menos um artigo." },
+        {
+          success: false,
+          sucesso: false,
+          error: "Adicione pelo menos um artigo.",
+        },
         { status: 400 }
       );
     }
@@ -215,10 +221,12 @@ export async function POST(req: Request) {
 
     if (erroProcesso || !processo) throw erroProcesso;
 
-    const resVal = await fetch(`${origem}/api/criar-projeto`, {
+    const resVal = await fetch(criarProjetoDropboxUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${String(serviceRoleKey)}`,
+        apikey: String(serviceRoleKey),
       },
       body: JSON.stringify({
         nome_empresa: nomeObra || "Sem nome",
@@ -226,10 +234,23 @@ export async function POST(req: Request) {
       }),
     });
 
-    const dataVal = await resVal.json();
+    const textoVal = await resVal.text();
 
-    if (!dataVal.sucesso) {
-      throw new Error(dataVal.erro || "Erro ao criar VAL automaticamente.");
+    let dataVal: any = null;
+
+    try {
+      dataVal = textoVal ? JSON.parse(textoVal) : null;
+    } catch {
+      dataVal = null;
+    }
+
+    if (!resVal.ok || !dataVal?.sucesso) {
+      throw new Error(
+        dataVal?.erro ||
+          dataVal?.message ||
+          textoVal ||
+          "Erro ao criar VAL automaticamente."
+      );
     }
 
     const { error: erroAtualizarVal } = await supabase
