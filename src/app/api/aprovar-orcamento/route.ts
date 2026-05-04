@@ -1,26 +1,41 @@
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl) {
+  throw new Error("NEXT_PUBLIC_SUPABASE_URL não definida.");
+}
+
+if (!serviceRoleKey) {
+  throw new Error("SUPABASE_SERVICE_ROLE_KEY não definida.");
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_FUNCTIONS_URL}/mover-projeto-para-encomendas`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-        body: JSON.stringify(body),
-      }
-    );
+    const url = `${supabaseUrl}/functions/v1/mover-projeto-para-encomendas`;
 
-    const data = await res.json();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: new Headers({
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${String(serviceRoleKey)}`,
+        apikey: String(serviceRoleKey),
+      }),
+      body: JSON.stringify(body),
+    });
+
+    const texto = await res.text();
+    const data = texto ? JSON.parse(texto) : null;
 
     return Response.json(data, { status: res.status });
   } catch (err) {
-    return Response.json({
-      sucesso: false,
-      erro: String(err),
-    });
+    return Response.json(
+      {
+        sucesso: false,
+        erro: String(err),
+      },
+      { status: 500 }
+    );
   }
 }
