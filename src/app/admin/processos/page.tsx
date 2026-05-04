@@ -24,7 +24,6 @@ type Processo = {
   dias_totais_previstos?: number | null;
   data_entrega_prevista?: string | null;
   created_at: string | null;
-
   codigo_val: string | null;
   caminho_dropbox: string | null;
   estado_dropbox: string | null;
@@ -106,10 +105,8 @@ export default function AdminProcessosPage() {
   const [processoEmAcao, setProcessoEmAcao] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [tipoMensagem, setTipoMensagem] = useState<"sucesso" | "erro">("sucesso");
-
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
-
   const [valorFinalEdit, setValorFinalEdit] = useState<Record<string, string>>({});
   const [custoEstimadoEdit, setCustoEstimadoEdit] = useState<Record<string, string>>({});
   const [notasAdminEdit, setNotasAdminEdit] = useState<Record<string, string>>({});
@@ -124,7 +121,6 @@ export default function AdminProcessosPage() {
       if (error) throw error;
 
       const user = data.session?.user;
-
       if (!user) {
         router.replace("/login");
         return;
@@ -270,23 +266,17 @@ export default function AdminProcessosPage() {
 
   function calcularArtigo(artigo: Artigo): CalculoArtigo {
     const dados = artigo.dados || {};
-
     const larguraOriginal = numeroSeguro(dados.largura);
     const alturaOriginal = numeroSeguro(dados.altura);
-
     const largura = converterParaMetros(larguraOriginal);
     const altura = converterParaMetros(alturaOriginal);
-
     const area = largura * altura;
-
     const material = dados.material || dados.acabamento || "";
     const precoBase = obterPrecoPorNome(artigo.tipo);
     const precoMaterial = obterPrecoPorNome(material);
-
     const subtotalBase = area * (precoBase + precoMaterial);
 
     let subtotalExtras = 0;
-
     for (const extra of dados.extras || []) {
       subtotalExtras += obterPrecoPorNome(extra.nome) * numeroSeguro(extra.quantidade);
     }
@@ -385,14 +375,23 @@ export default function AdminProcessosPage() {
         return;
       }
 
+      const artigosDoProcesso = obterArtigosDoProcesso(processo.id);
+
+      if (artigosDoProcesso.length === 0) {
+        mostrarMensagem("Este processo não tem artigos associados.", "erro");
+        return;
+      }
+
       const res = await fetch("/api/gerar-qr-artigos", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          processo_id: processo.id,
           codigo_val: processo.codigo_val,
           lote: processo.lote_atual || 1,
+          caminho_dropbox: processo.caminho_dropbox,
         }),
       });
 
@@ -589,20 +588,46 @@ export default function AdminProcessosPage() {
 
       if (error) throw error;
 
+      const processoAtualizado: Processo = {
+        ...processo,
+        caminho_dropbox: data.caminho_novo,
+        estado_dropbox: "encomenda",
+        estado: "Validado",
+      };
+
       setProcessos((prev) =>
-        prev.map((p) =>
-          p.id === processo.id
-            ? {
-                ...p,
-                caminho_dropbox: data.caminho_novo,
-                estado_dropbox: "encomenda",
-                estado: "Validado",
-              }
-            : p
-        )
+        prev.map((p) => (p.id === processo.id ? processoAtualizado : p))
       );
 
-      mostrarMensagem("Processo aprovado e movido para Encomendas.", "sucesso");
+      const qrRes = await fetch("/api/gerar-qr-artigos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          processo_id: processo.id,
+          codigo_val: processo.codigo_val,
+          lote: processo.lote_atual || 1,
+          caminho_dropbox: data.caminho_novo,
+        }),
+      });
+
+      const qrData = await qrRes.json();
+
+      if (!qrData.sucesso) {
+        mostrarMensagem(
+          `Processo aprovado, mas houve erro ao gerar QR: ${
+            qrData.erro || "erro desconhecido"
+          }`,
+          "erro"
+        );
+        return;
+      }
+
+      mostrarMensagem(
+        `Processo aprovado, movido para Encomendas e QR criados (${qrData.total || 0}).`,
+        "sucesso"
+      );
     } catch (error) {
       console.error(error);
       mostrarMensagem("Erro ao aprovar orçamento.", "erro");
@@ -667,10 +692,8 @@ export default function AdminProcessosPage() {
   function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-
       reader.onload = () => resolve(String(reader.result));
       reader.onerror = reject;
-
       reader.readAsDataURL(file);
     });
   }
@@ -926,7 +949,6 @@ export default function AdminProcessosPage() {
                         <p style={subtextoStyle}>Cliente: {processo.nome_cliente || "—"}</p>
                         <p style={subtextoStyle}>Localização: {processo.localizacao || "—"}</p>
                         <p style={subtextoStyle}>Criado em: {formatarData(processo.created_at)}</p>
-
                         <p style={subtextoStyle}>
                           <strong>VAL:</strong>{" "}
                           {processo.codigo_val || "Ainda não criado"}
@@ -999,13 +1021,15 @@ export default function AdminProcessosPage() {
                               Copiar Link QR
                             </button>
 
-                            <button
-                              onClick={() => gerarQRArtigos(processo)}
-                              style={botaoPrincipalStyle}
-                              disabled={processoEmAcao === processo.id}
-                            >
-                              Gerar QR Artigos
-                            </button>
+                            {processo.estado === "Validado" && (
+                              <button
+                                onClick={() => gerarQRArtigos(processo)}
+                                style={botaoPrincipalStyle}
+                                disabled={processoEmAcao === processo.id}
+                              >
+                                Gerar QR Artigos
+                              </button>
+                            )}
 
                             <label style={botaoSecundarioStyle}>
                               Upload Ficheiro
@@ -1016,7 +1040,6 @@ export default function AdminProcessosPage() {
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (!file) return;
-
                                   void uploadFicheiroProcesso(processo, file);
                                   e.currentTarget.value = "";
                                 }}
@@ -1070,22 +1093,10 @@ export default function AdminProcessosPage() {
                     </div>
 
                     <div style={metricasStyle}>
-                      <div style={miniCardStyle}>
-                        <span>Valor</span>
-                        <strong>{formatarMoeda(valor)}</strong>
-                      </div>
-                      <div style={miniCardStyle}>
-                        <span>Custo</span>
-                        <strong>{formatarMoeda(custo)}</strong>
-                      </div>
-                      <div style={miniCardStyle}>
-                        <span>Lucro</span>
-                        <strong>{formatarMoeda(lucro)}</strong>
-                      </div>
-                      <div style={miniCardStyle}>
-                        <span>Margem</span>
-                        <strong>{margem.toFixed(2)}%</strong>
-                      </div>
+                      <div style={miniCardStyle}><span>Valor</span><strong>{formatarMoeda(valor)}</strong></div>
+                      <div style={miniCardStyle}><span>Custo</span><strong>{formatarMoeda(custo)}</strong></div>
+                      <div style={miniCardStyle}><span>Lucro</span><strong>{formatarMoeda(lucro)}</strong></div>
+                      <div style={miniCardStyle}><span>Margem</span><strong>{margem.toFixed(2)}%</strong></div>
                     </div>
 
                     {aberto && (
@@ -1107,27 +1118,17 @@ export default function AdminProcessosPage() {
                               {urlProducao}
                             </a>
                             <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                              <button
-                                type="button"
-                                onClick={() => abrirProducao(processo)}
-                                style={botaoProducaoStyle}
-                              >
+                              <button type="button" onClick={() => abrirProducao(processo)} style={botaoProducaoStyle}>
                                 Abrir QR Produção
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => copiarLinkProducao(processo)}
-                                style={botaoSecundarioStyle}
-                              >
+                              <button type="button" onClick={() => copiarLinkProducao(processo)} style={botaoSecundarioStyle}>
                                 Copiar Link
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => gerarQRArtigos(processo)}
-                                style={botaoPrincipalStyle}
-                              >
-                                Gerar QR Artigos
-                              </button>
+                              {processo.estado === "Validado" && (
+                                <button type="button" onClick={() => gerarQRArtigos(processo)} style={botaoPrincipalStyle}>
+                                  Gerar QR Artigos
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}
@@ -1212,26 +1213,11 @@ export default function AdminProcessosPage() {
                                   <p><strong>Área corrigida:</strong> {calculo.area.toFixed(2)} m²</p>
 
                                   <div style={calculoBoxStyle}>
-                                    <div style={linhaCalculoStyle}>
-                                      <span>Preço base / m²</span>
-                                      <strong>{formatarMoeda(calculo.precoBase)}</strong>
-                                    </div>
-                                    <div style={linhaCalculoStyle}>
-                                      <span>Preço material / m²</span>
-                                      <strong>{formatarMoeda(calculo.precoMaterial)}</strong>
-                                    </div>
-                                    <div style={linhaCalculoStyle}>
-                                      <span>Subtotal base</span>
-                                      <strong>{formatarMoeda(calculo.subtotalBase)}</strong>
-                                    </div>
-                                    <div style={linhaCalculoStyle}>
-                                      <span>Subtotal extras</span>
-                                      <strong>{formatarMoeda(calculo.subtotalExtras)}</strong>
-                                    </div>
-                                    <div style={linhaCalculoDestaqueStyle}>
-                                      <span>Total artigo</span>
-                                      <strong>{formatarMoeda(calculo.subtotalTotal)}</strong>
-                                    </div>
+                                    <div style={linhaCalculoStyle}><span>Preço base / m²</span><strong>{formatarMoeda(calculo.precoBase)}</strong></div>
+                                    <div style={linhaCalculoStyle}><span>Preço material / m²</span><strong>{formatarMoeda(calculo.precoMaterial)}</strong></div>
+                                    <div style={linhaCalculoStyle}><span>Subtotal base</span><strong>{formatarMoeda(calculo.subtotalBase)}</strong></div>
+                                    <div style={linhaCalculoStyle}><span>Subtotal extras</span><strong>{formatarMoeda(calculo.subtotalExtras)}</strong></div>
+                                    <div style={linhaCalculoDestaqueStyle}><span>Total artigo</span><strong>{formatarMoeda(calculo.subtotalTotal)}</strong></div>
                                   </div>
 
                                   <div style={{ marginTop: 12 }}>
