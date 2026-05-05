@@ -411,6 +411,48 @@ export default function AdminProcessosPage() {
     }
   }
 
+  async function apagarProcessoRejeitado(processo: Processo) {
+    try {
+      setProcessoEmAcao(processo.id);
+      limparMensagem();
+
+      if (processo.estado !== "Rejeitado") {
+        mostrarMensagem("Só podes apagar processos rejeitados.", "erro");
+        return;
+      }
+
+      const confirmar = window.confirm(
+        `Tens a certeza que queres apagar o processo "${processo.nome_obra || processo.codigo_val || processo.id}"?`
+      );
+
+      if (!confirmar) return;
+
+      const { error: erroArtigos } = await supabase
+        .from("artigos")
+        .delete()
+        .eq("processo_id", processo.id);
+
+      if (erroArtigos) throw erroArtigos;
+
+      const { error: erroProcesso } = await supabase
+        .from("processos")
+        .delete()
+        .eq("id", processo.id);
+
+      if (erroProcesso) throw erroProcesso;
+
+      setProcessos((prev) => prev.filter((p) => p.id !== processo.id));
+      setArtigos((prev) => prev.filter((a) => a.processo_id !== processo.id));
+
+      mostrarMensagem("Processo rejeitado apagado com sucesso.", "sucesso");
+    } catch (error) {
+      console.error(error);
+      mostrarMensagem("Erro ao apagar processo.", "erro");
+    } finally {
+      setProcessoEmAcao(null);
+    }
+  }
+
   async function atualizarEstado(processoId: string, estado: string) {
     try {
       setProcessoEmAcao(processoId);
@@ -1089,6 +1131,16 @@ export default function AdminProcessosPage() {
                         >
                           Rejeitar
                         </button>
+
+                        {processo.estado === "Rejeitado" && (
+                          <button
+                            onClick={() => apagarProcessoRejeitado(processo)}
+                            style={botaoApagarStyle}
+                            disabled={processoEmAcao === processo.id}
+                          >
+                            Apagar
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -1518,6 +1570,16 @@ const botaoRejeitarStyle: CSSProperties = {
   background: "rgba(180,50,50,0.18)",
   color: "white",
   border: "1px solid rgba(180,50,50,0.35)",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botaoApagarStyle: CSSProperties = {
+  background: "rgba(120,20,20,0.28)",
+  color: "white",
+  border: "1px solid rgba(255,80,80,0.45)",
   borderRadius: 10,
   padding: "10px 14px",
   fontWeight: "bold",
