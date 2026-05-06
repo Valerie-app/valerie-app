@@ -22,8 +22,8 @@ export default function ProducaoPage() {
   const [codigoVal, setCodigoVal] = useState("");
   const [lote, setLote] = useState(1);
   const [artigoId, setArtigoId] = useState("");
-  const [operador, setOperador] = useState("");
   const [operadores, setOperadores] = useState<Operador[]>([]);
+  const [operadoresSelecionados, setOperadoresSelecionados] = useState<string[]>([]);
   const [tipoTrabalho, setTipoTrabalho] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [aEnviar, setAEnviar] = useState(false);
@@ -82,6 +82,25 @@ export default function ProducaoPage() {
       .join(":");
   }
 
+  function alternarOperador(nome: string) {
+    setOperadoresSelecionados((prev) => {
+      if (prev.includes(nome)) {
+        return prev.filter((operador) => operador !== nome);
+      }
+
+      return [...prev, nome];
+    });
+  }
+
+  function alternarTodosOperadores() {
+    if (operadoresSelecionados.length === operadores.length) {
+      setOperadoresSelecionados([]);
+      return;
+    }
+
+    setOperadoresSelecionados(operadores.map((operador) => operador.nome));
+  }
+
   async function registar(estado: string) {
     try {
       setAEnviar(true);
@@ -92,30 +111,46 @@ export default function ProducaoPage() {
         return;
       }
 
-      if (!operador || !tipoTrabalho) {
-        setMensagem("Seleciona o operador e o tipo de trabalho.");
+      if (!tipoTrabalho || operadoresSelecionados.length === 0) {
+        setMensagem("Seleciona a tarefa e pelo menos um operador.");
         return;
       }
 
-      const res = await fetch("/api/registar-tempo-producao", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          codigo_val: codigoVal,
-          lote,
-          artigo_id: artigoId || null,
-          tipo_trabalho: tipoTrabalho,
-          operador,
-          estado,
-        }),
-      });
+      const resultados = await Promise.all(
+        operadoresSelecionados.map(async (operador) => {
+          const res = await fetch("/api/registar-tempo-producao", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              codigo_val: codigoVal,
+              lote,
+              artigo_id: artigoId || null,
+              tipo_trabalho: tipoTrabalho,
+              operador,
+              estado,
+            }),
+          });
 
-      const data = await res.json();
+          const data = await res.json();
 
-      if (!data.sucesso) {
-        setMensagem(data.erro || "Erro ao registar.");
+          return {
+            operador,
+            sucesso: Boolean(data.sucesso),
+            erro: data.erro || "Erro ao registar.",
+          };
+        })
+      );
+
+      const falhados = resultados.filter((resultado) => !resultado.sucesso);
+
+      if (falhados.length > 0) {
+        setMensagem(
+          `Erro em ${falhados.length} operador(es): ${falhados
+            .map((resultado) => resultado.operador)
+            .join(", ")}`
+        );
         return;
       }
 
@@ -130,7 +165,9 @@ export default function ProducaoPage() {
         setInicioCronometro(null);
       }
 
-      setMensagem(`Registo ${estado} com sucesso.`);
+      setMensagem(
+        `Registo ${estado} com sucesso para ${operadoresSelecionados.length} operador(es).`
+      );
     } catch (error) {
       console.error(error);
       setMensagem("Erro ao registar.");
@@ -148,7 +185,7 @@ export default function ProducaoPage() {
             <div style={headerTitleStyle}>Produção</div>
             <div style={headerSubtitleStyle}>{codigoVal || "VAL não definido"}</div>
           </div>
-          <div style={avatarStyle}>👤</div>
+          <div style={avatarStyle}>👥</div>
         </header>
 
         <section style={obraCardStyle}>
@@ -166,23 +203,44 @@ export default function ProducaoPage() {
 
         <section style={sectionStyle}>
           <div style={sectionHeaderStyle}>
+            <span>Operadores</span>
+            <button type="button" onClick={alternarTodosOperadores} style={miniButtonStyle}>
+              {operadoresSelecionados.length === operadores.length ? "Limpar" : "Todos"}
+            </button>
+          </div>
+
+          <div style={operadoresGridStyle}>
+            {operadores.length === 0 ? (
+              <div style={emptyStyle}>Sem operadores ativos.</div>
+            ) : (
+              operadores.map((op) => {
+                const ativo = operadoresSelecionados.includes(op.nome);
+
+                return (
+                  <button
+                    key={op.id}
+                    type="button"
+                    onClick={() => alternarOperador(op.nome)}
+                    style={{
+                      ...operadorButtonStyle,
+                      ...(ativo ? operadorSelecionadoStyle : {}),
+                    }}
+                  >
+                    <span style={operadorAvatarStyle}>
+                      {op.nome.slice(0, 1).toUpperCase()}
+                    </span>
+                    <span style={{ flex: 1 }}>{op.nome}</span>
+                    <span style={checkStyle}>{ativo ? "✓" : ""}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div style={sectionHeaderStyle}>
             <span>Tarefas de produção</span>
             <span style={pillStyle}>{tarefas.length} tarefas</span>
           </div>
-
-          <label style={labelStyle}>Operador</label>
-          <select
-            value={operador}
-            onChange={(e) => setOperador(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">Selecionar operador</option>
-            {operadores.map((op) => (
-              <option key={op.id} value={op.nome}>
-                {op.nome}
-              </option>
-            ))}
-          </select>
 
           <div style={tarefasGridStyle}>
             {tarefas.map((tarefa) => {
@@ -206,7 +264,7 @@ export default function ProducaoPage() {
                         ? ultimoEstado === "iniciado"
                           ? "Em progresso"
                           : "Selecionada"
-                        : "Por iniciar"}
+                        : tarefa.descricao}
                     </small>
                   </span>
                   <span style={chevronStyle}>›</span>
@@ -230,7 +288,9 @@ export default function ProducaoPage() {
           </h2>
 
           <p style={obraLineStyle}>
-            {operador ? `👷 ${operador}` : "👷 Operador por selecionar"}
+            {operadoresSelecionados.length > 0
+              ? `👥 ${operadoresSelecionados.length} operador(es): ${operadoresSelecionados.join(", ")}`
+              : "👥 Operadores por selecionar"}
           </p>
 
           <div style={timerStyle}>{formatarTempo(segundos)}</div>
@@ -268,7 +328,7 @@ export default function ProducaoPage() {
         <section style={notaCardStyle}>
           <strong>Notas</strong>
           <p style={{ margin: "8px 0 0", opacity: 0.7 }}>
-            Confirma sempre o operador antes de iniciar ou terminar uma tarefa.
+            Podes selecionar vários operadores. O sistema cria um registo separado para cada operador.
           </p>
         </section>
 
@@ -295,7 +355,8 @@ const phoneStyle: CSSProperties = {
   maxWidth: 430,
   minHeight: "calc(100dvh - 32px)",
   borderRadius: 32,
-  background: "linear-gradient(180deg, rgba(14,26,49,0.98), rgba(7,13,27,0.98))",
+  background:
+    "linear-gradient(180deg, rgba(14,26,49,0.98), rgba(7,13,27,0.98))",
   border: "1px solid rgba(130,160,220,0.22)",
   boxShadow: "0 24px 70px rgba(0,0,0,0.45)",
   padding: 18,
@@ -348,7 +409,8 @@ const obraCardStyle: CSSProperties = {
   gap: 12,
   padding: 16,
   borderRadius: 18,
-  background: "linear-gradient(135deg, rgba(20,43,78,0.95), rgba(14,28,55,0.96))",
+  background:
+    "linear-gradient(135deg, rgba(20,43,78,0.95), rgba(14,28,55,0.96))",
   border: "1px solid rgba(115,150,210,0.18)",
 };
 
@@ -408,21 +470,65 @@ const pillStyle: CSSProperties = {
   letterSpacing: 0,
 };
 
-const labelStyle: CSSProperties = {
-  display: "block",
-  fontWeight: "bold",
-  marginTop: 2,
+const miniButtonStyle: CSSProperties = {
+  border: "1px solid rgba(104,168,255,0.35)",
+  background: "rgba(104,168,255,0.12)",
+  color: "#dbe8ff",
+  borderRadius: 999,
+  padding: "6px 12px",
+  fontWeight: 800,
+  cursor: "pointer",
 };
 
-const inputStyle: CSSProperties = {
-  width: "100%",
-  padding: 15,
+const operadoresGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 10,
+};
+
+const operadorButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: 10,
+  minHeight: 48,
   borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(20,36,67,0.92)",
   color: "white",
-  outline: "none",
-  fontSize: 15,
+  fontWeight: 800,
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+const operadorSelecionadoStyle: CSSProperties = {
+  background:
+    "linear-gradient(135deg, rgba(63,163,107,0.72), rgba(25,93,65,0.88))",
+  border: "1px solid rgba(116,255,175,0.45)",
+};
+
+const operadorAvatarStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 999,
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(255,255,255,0.14)",
+  fontSize: 13,
+};
+
+const checkStyle: CSSProperties = {
+  marginLeft: "auto",
+  color: "#d9ffe8",
+  fontWeight: 900,
+};
+
+const emptyStyle: CSSProperties = {
+  gridColumn: "1 / -1",
+  padding: 14,
+  borderRadius: 14,
+  background: "rgba(255,255,255,0.06)",
+  color: "rgba(255,255,255,0.70)",
 };
 
 const tarefasGridStyle: CSSProperties = {
@@ -445,7 +551,8 @@ const tarefaButtonStyle: CSSProperties = {
 };
 
 const tarefaSelecionadaStyle: CSSProperties = {
-  background: "linear-gradient(135deg, rgba(30,72,122,0.96), rgba(23,55,100,0.96))",
+  background:
+    "linear-gradient(135deg, rgba(30,72,122,0.96), rgba(23,55,100,0.96))",
   border: "1px solid rgba(104,168,255,0.42)",
   boxShadow: "0 12px 28px rgba(0,0,0,0.22)",
 };
@@ -475,7 +582,8 @@ const chevronStyle: CSSProperties = {
 const activeCardStyle: CSSProperties = {
   padding: 16,
   borderRadius: 18,
-  background: "linear-gradient(135deg, rgba(13,37,73,0.96), rgba(12,25,50,0.96))",
+  background:
+    "linear-gradient(135deg, rgba(13,37,73,0.96), rgba(12,25,50,0.96))",
   border: "1px solid rgba(104,168,255,0.18)",
 };
 
