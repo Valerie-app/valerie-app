@@ -41,7 +41,11 @@ export default function ImportarVALPage() {
   async function importarVAL(val: any) {
     try {
       setMensagem("");
-      setAImportar((prev) => ({ ...prev, [val.codigo_val]: true }));
+
+      setAImportar((prev) => ({
+        ...prev,
+        [val.codigo_val]: true,
+      }));
 
       const res = await fetch("/api/importar-val", {
         method: "POST",
@@ -67,13 +71,20 @@ export default function ImportarVALPage() {
     } catch (err: any) {
       setMensagem(String(err));
     } finally {
-      setAImportar((prev) => ({ ...prev, [val.codigo_val]: false }));
+      setAImportar((prev) => ({
+        ...prev,
+        [val.codigo_val]: false,
+      }));
     }
   }
 
   function abrirDropbox(caminho: string) {
     if (!caminho) return;
-    window.open(`https://www.dropbox.com/home${caminho}`, "_blank");
+
+    window.open(
+      `https://www.dropbox.com/home${caminho}`,
+      "_blank"
+    );
   }
 
   return (
@@ -152,11 +163,20 @@ export default function ImportarVALPage() {
                 </strong>
 
                 <div style={{ marginTop: 6 }}>
-                  {val.nome_pasta || val.nome_obra || "Sem nome"}
+                  {val.nome_pasta ||
+                    val.nome_obra ||
+                    "Sem nome"}
                 </div>
 
-                <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>
-                  {val.estado_dropbox || "Dropbox"} · {val.caminho_dropbox || ""}
+                <div
+                  style={{
+                    marginTop: 6,
+                    opacity: 0.75,
+                    fontSize: 13,
+                  }}
+                >
+                  {val.estado_dropbox || "Dropbox"} ·{" "}
+                  {val.caminho_dropbox || ""}
                 </div>
               </div>
 
@@ -180,7 +200,10 @@ export default function ImportarVALPage() {
                       : "rgba(63,163,107,0.22)",
                     color: "white",
                     fontWeight: "bold",
-                    cursor: importado || estaAImportar ? "not-allowed" : "pointer",
+                    cursor:
+                      importado || estaAImportar
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
                   {importado
@@ -191,12 +214,16 @@ export default function ImportarVALPage() {
                 </button>
 
                 <button
-                  onClick={() => abrirDropbox(val.caminho_dropbox)}
+                  onClick={() =>
+                    abrirDropbox(val.caminho_dropbox)
+                  }
                   style={{
                     padding: "10px 14px",
                     borderRadius: 10,
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    background: "rgba(255,255,255,0.08)",
+                    border:
+                      "1px solid rgba(255,255,255,0.15)",
+                    background:
+                      "rgba(255,255,255,0.08)",
                     color: "white",
                     fontWeight: "bold",
                     cursor: "pointer",
