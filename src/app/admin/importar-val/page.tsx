@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import LogoutButton from "@/components/LogoutButton";
 
 export default function ImportarVALPage() {
@@ -9,6 +9,18 @@ export default function ImportarVALPage() {
   const [mensagem, setMensagem] = useState("");
   const [importados, setImportados] = useState<Record<string, boolean>>({});
   const [aImportar, setAImportar] = useState<Record<string, boolean>>({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function verificarTamanho() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    verificarTamanho();
+    window.addEventListener("resize", verificarTamanho);
+
+    return () => window.removeEventListener("resize", verificarTamanho);
+  }, []);
 
   async function listarVAL() {
     try {
@@ -85,21 +97,27 @@ export default function ImportarVALPage() {
   }
 
   return (
-    <main style={mainStyle}>
-      <aside style={asideStyle}>
-        <div style={logoStyle}>VALERIE</div>
+    <main style={isMobile ? mainMobileStyle : mainStyle}>
+      <aside style={isMobile ? asideMobileStyle : asideStyle}>
+        <div style={isMobile ? logoMobileStyle : logoStyle}>VALERIE</div>
 
-        <div style={menuContainerStyle}>
-          <a href="/admin" style={menuStyle}>Dashboard</a>
-          <a href="/admin/processos" style={menuStyle}>Processos</a>
-          <a href="/admin/clientes" style={menuStyle}>Clientes</a>
-          <a href="/admin/precos" style={menuStyle}>Preços</a>
-          <a href="/admin/financeiro" style={menuStyle}>Financeiro</a>
-          <a href="/admin/calendario" style={menuStyle}>Calendário</a>
-          <a href="/admin/importar-val" style={{ ...menuStyle, background: "rgba(255,255,255,0.08)" }}>
+        <div style={isMobile ? menuContainerMobileStyle : menuContainerStyle}>
+          <a href="/admin" style={isMobile ? menuMobileStyle : menuStyle}>Dashboard</a>
+          <a href="/admin/processos" style={isMobile ? menuMobileStyle : menuStyle}>Processos</a>
+          <a href="/admin/clientes" style={isMobile ? menuMobileStyle : menuStyle}>Clientes</a>
+          <a href="/admin/precos" style={isMobile ? menuMobileStyle : menuStyle}>Preços</a>
+          <a href="/admin/financeiro" style={isMobile ? menuMobileStyle : menuStyle}>Financeiro</a>
+          <a href="/admin/calendario" style={isMobile ? menuMobileStyle : menuStyle}>Calendário</a>
+          <a
+            href="/admin/importar-val"
+            style={{
+              ...(isMobile ? menuMobileStyle : menuStyle),
+              background: "rgba(255,255,255,0.08)",
+            }}
+          >
             Importar VAL
           </a>
-          <a href="/aprovacao-clientes" style={menuStyle}>Aprovação Clientes</a>
+          <a href="/aprovacao-clientes" style={isMobile ? menuMobileStyle : menuStyle}>Aprovação Clientes</a>
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -107,11 +125,11 @@ export default function ImportarVALPage() {
         </div>
       </aside>
 
-      <section style={contentStyle}>
-        <div style={heroStyle}>
+      <section style={isMobile ? contentMobileStyle : contentStyle}>
+        <div style={isMobile ? heroMobileStyle : heroStyle}>
           <div style={{ minWidth: 0 }}>
             <div style={eyebrowStyle}>Migração / Arranque</div>
-            <h1 style={titleStyle}>Importar VAL existentes</h1>
+            <h1 style={isMobile ? titleMobileStyle : titleStyle}>Importar VAL existentes</h1>
             <p style={subtitleStyle}>
               Lê os VAL já criados manualmente no Dropbox e importa para a app.
             </p>
@@ -120,7 +138,7 @@ export default function ImportarVALPage() {
           <button
             onClick={listarVAL}
             disabled={loading}
-            style={botaoPrincipalStyle}
+            style={isMobile ? botaoPrincipalMobileStyle : botaoPrincipalStyle}
           >
             {loading ? "A carregar..." : "Listar VAL Dropbox"}
           </button>
@@ -128,7 +146,7 @@ export default function ImportarVALPage() {
 
         {mensagem && <div style={mensagemStyle}>{mensagem}</div>}
 
-        <div style={cardStyle}>
+        <div style={isMobile ? cardMobileStyle : cardStyle}>
           <div style={listaStyle}>
             {vals.length === 0 ? (
               <div style={emptyStyle}>
@@ -143,7 +161,7 @@ export default function ImportarVALPage() {
                   <div
                     key={`${val.codigo_val}-${index}`}
                     style={{
-                      ...valCardStyle,
+                      ...(isMobile ? valCardMobileStyle : valCardStyle),
                       background: importado
                         ? "rgba(63,163,107,0.14)"
                         : "rgba(255,255,255,0.06)",
@@ -166,12 +184,12 @@ export default function ImportarVALPage() {
                       </div>
                     </div>
 
-                    <div style={acoesCardStyle}>
+                    <div style={isMobile ? acoesCardMobileStyle : acoesCardStyle}>
                       <button
                         onClick={() => importarVAL(val)}
                         disabled={importado || estaAImportar}
                         style={{
-                          ...botaoImportarStyle,
+                          ...(isMobile ? botaoImportarMobileStyle : botaoImportarStyle),
                           cursor: importado || estaAImportar ? "not-allowed" : "pointer",
                           background: importado
                             ? "rgba(63,163,107,0.35)"
@@ -187,7 +205,7 @@ export default function ImportarVALPage() {
 
                       <button
                         onClick={() => abrirDropbox(val.caminho_dropbox)}
-                        style={botaoSecundarioStyle}
+                        style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}
                       >
                         Abrir Dropbox
                       </button>
@@ -203,39 +221,36 @@ export default function ImportarVALPage() {
   );
 }
 
+/* DESKTOP ORIGINAL */
+
 const mainStyle: CSSProperties = {
   minHeight: "100dvh",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
-  flexDirection: "column",
-  overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: "100%",
-  minHeight: "auto",
-  padding: "18px 16px",
+  width: 260,
+  minHeight: "100dvh",
+  padding: "30px 20px",
   background: "rgba(0,0,0,0.14)",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-  boxSizing: "border-box",
+  borderRight: "1px solid rgba(255,255,255,0.08)",
   flexShrink: 0,
+  boxSizing: "border-box",
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: 28,
-  letterSpacing: 6,
-  marginBottom: 18,
+  fontSize: 36,
+  letterSpacing: 9,
+  marginBottom: 36,
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "row",
+  display: "grid",
   gap: 12,
-  overflowX: "auto",
-  paddingBottom: 6,
 };
 
 const menuStyle: CSSProperties = {
@@ -245,31 +260,25 @@ const menuStyle: CSSProperties = {
   color: "white",
   textDecoration: "none",
   fontWeight: "bold",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
 };
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: 16,
+  padding: 40,
   overflowX: "hidden",
-  width: "100%",
-  maxWidth: "100%",
-  boxSizing: "border-box",
 };
 
 const heroStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
+  display: "flex",
+  justifyContent: "space-between",
   alignItems: "flex-start",
-  gap: 16,
-  padding: 18,
-  borderRadius: 18,
+  gap: 20,
+  padding: 28,
+  borderRadius: 22,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: 20,
   overflow: "hidden",
-  boxSizing: "border-box",
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -282,7 +291,7 @@ const eyebrowStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 30,
+  fontSize: 38,
   wordBreak: "break-word",
 };
 
@@ -294,8 +303,8 @@ const subtitleStyle: CSSProperties = {
 };
 
 const cardStyle: CSSProperties = {
-  padding: 18,
-  borderRadius: 16,
+  padding: 24,
+  borderRadius: 18,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   overflow: "hidden",
@@ -311,7 +320,7 @@ const valCardStyle: CSSProperties = {
   padding: 16,
   borderRadius: 14,
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1fr 180px",
   gap: 16,
   alignItems: "center",
   minWidth: 0,
@@ -348,7 +357,6 @@ const botaoPrincipalStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -358,7 +366,6 @@ const botaoImportarStyle: CSSProperties = {
   border: "1px solid rgba(63,163,107,0.45)",
   color: "white",
   fontWeight: "bold",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -370,7 +377,6 @@ const botaoSecundarioStyle: CSSProperties = {
   color: "white",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -381,4 +387,97 @@ const mensagemStyle: CSSProperties = {
   background: "rgba(255,255,255,0.08)",
   border: "1px solid rgba(255,255,255,0.10)",
   wordBreak: "break-word",
+};
+
+/* MOBILE */
+
+const mainMobileStyle: CSSProperties = {
+  ...mainStyle,
+  flexDirection: "column",
+  overflowX: "hidden",
+};
+
+const asideMobileStyle: CSSProperties = {
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
+  background: "rgba(0,0,0,0.14)",
+  borderRight: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
+  flexShrink: 0,
+};
+
+const logoMobileStyle: CSSProperties = {
+  fontSize: 28,
+  letterSpacing: 6,
+  marginBottom: 18,
+};
+
+const menuContainerMobileStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: 12,
+  overflowX: "auto",
+  paddingBottom: 6,
+};
+
+const menuMobileStyle: CSSProperties = {
+  ...menuStyle,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+const contentMobileStyle: CSSProperties = {
+  flex: 1,
+  padding: 16,
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const heroMobileStyle: CSSProperties = {
+  ...heroStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 16,
+  padding: 18,
+  borderRadius: 18,
+  boxSizing: "border-box",
+};
+
+const titleMobileStyle: CSSProperties = {
+  ...titleStyle,
+  fontSize: 30,
+};
+
+const cardMobileStyle: CSSProperties = {
+  ...cardStyle,
+  padding: 18,
+};
+
+const valCardMobileStyle: CSSProperties = {
+  ...valCardStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const acoesCardMobileStyle: CSSProperties = {
+  ...acoesCardStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const botaoPrincipalMobileStyle: CSSProperties = {
+  ...botaoPrincipalStyle,
+  width: "100%",
+};
+
+const botaoImportarMobileStyle: CSSProperties = {
+  ...botaoImportarStyle,
+  width: "100%",
+};
+
+const botaoSecundarioMobileStyle: CSSProperties = {
+  ...botaoSecundarioStyle,
+  width: "100%",
 };
