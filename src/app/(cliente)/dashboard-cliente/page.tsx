@@ -57,6 +57,7 @@ export default function DashboardClientePage() {
     async function validarCliente() {
       try {
         const { data, error } = await supabase.auth.getSession();
+
         if (error) throw error;
 
         const user = data.session?.user;
@@ -96,6 +97,7 @@ export default function DashboardClientePage() {
 
         setClienteId(cliente.id);
         setNomeCliente(cliente.nome || "Cliente");
+
         await carregarProcessos(cliente.id);
       } catch (error) {
         console.error(error);
@@ -137,10 +139,6 @@ export default function DashboardClientePage() {
     await carregarProcessos(clienteId);
   }
 
-  function irPara(path: string) {
-    window.location.href = path;
-  }
-
   function formatarEuro(valor: number | null | undefined) {
     if (valor === null || valor === undefined) return "—";
 
@@ -152,8 +150,10 @@ export default function DashboardClientePage() {
 
   function formatarData(valor: string | null | undefined) {
     if (!valor) return "—";
+
     const data = new Date(valor);
     if (Number.isNaN(data.getTime())) return "—";
+
     return data.toLocaleDateString("pt-PT");
   }
 
@@ -216,10 +216,6 @@ export default function DashboardClientePage() {
   if (aVerificar) {
     return (
       <main style={mainStyle}>
-        <aside style={asideStyle}>
-          <div style={logoStyle}>VALERIE</div>
-        </aside>
-
         <section style={contentStyle}>
           <div style={cardStyle}>
             <h1 style={{ marginTop: 0 }}>Área Cliente</h1>
@@ -240,7 +236,7 @@ export default function DashboardClientePage() {
             <button
               key={item.path}
               type="button"
-              onClick={() => irPara(item.path)}
+              onClick={() => router.push(item.path)}
               style={{
                 ...menuStyle,
                 ...(pathname === item.path ? menuActiveStyle : {}),
@@ -258,7 +254,7 @@ export default function DashboardClientePage() {
 
       <section style={contentStyle}>
         <div style={heroStyle}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={eyebrowStyle}>Painel do Cliente</div>
             <h1 style={titleStyle}>Área Cliente</h1>
             <p style={subtitleStyle}>
@@ -279,7 +275,7 @@ export default function DashboardClientePage() {
 
             <button
               type="button"
-              onClick={() => irPara("/novo-orcamento-cliente")}
+              onClick={() => router.push("/novo-orcamento-cliente")}
               style={botaoPrincipalStyle}
             >
               Novo Orçamento
@@ -321,7 +317,7 @@ export default function DashboardClientePage() {
         <div style={duasColunasStyle}>
           <div style={cardStyle}>
             <div style={cardHeaderStyle}>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <h2 style={{ margin: 0 }}>Os Meus Processos</h2>
                 <p style={cardTextStyle}>
                   Consulte rapidamente os seus pedidos mais recentes.
@@ -330,7 +326,7 @@ export default function DashboardClientePage() {
 
               <button
                 type="button"
-                onClick={() => irPara("/processos-cliente")}
+                onClick={() => router.push("/processos-cliente")}
                 style={botaoSecundarioStyle}
               >
                 Ver todos
@@ -367,7 +363,7 @@ export default function DashboardClientePage() {
               <div style={{ display: "grid", gap: "12px" }}>
                 {processosFiltrados.slice(0, 5).map((processo) => (
                   <div key={processo.id} style={processoCardStyle}>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div style={processoTituloStyle}>
                         {processo.nome_obra || "Sem nome de obra"}
                       </div>
@@ -381,12 +377,12 @@ export default function DashboardClientePage() {
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gap: "8px", justifyItems: "end" }}>
+                    <div style={processoRightStyle}>
                       <div style={{ ...badgeStyle, ...estadoStyle(processo.estado) }}>
                         {processo.estado || "Sem estado"}
                       </div>
 
-                      <div style={{ fontWeight: "bold" }}>
+                      <div style={{ fontWeight: "bold", wordBreak: "break-word" }}>
                         {formatarEuro(valorProcesso(processo))}
                       </div>
                     </div>
@@ -406,8 +402,8 @@ export default function DashboardClientePage() {
               <div style={{ display: "grid", gap: "12px" }}>
                 {resumo.proximasEntregas.map((processo) => (
                   <div key={processo.id} style={entregaCardStyle}>
-                    <div>
-                      <div style={{ fontWeight: "bold" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: "bold", wordBreak: "break-word" }}>
                         {processo.nome_obra || "Sem nome de obra"}
                       </div>
                       <div style={subtextoStyle}>
@@ -432,6 +428,8 @@ export default function DashboardClientePage() {
 const mainStyle: CSSProperties = {
   minHeight: "100dvh",
   display: "flex",
+  flexDirection: "column",
+  overflowX: "hidden",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
@@ -439,27 +437,30 @@ const mainStyle: CSSProperties = {
 };
 
 const asideStyle: CSSProperties = {
-  width: "260px",
-  minHeight: "100dvh",
-  padding: "30px 20px",
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
   background: "rgba(0,0,0,0.14)",
-  borderRight: "1px solid rgba(255,255,255,0.08)",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
   flexShrink: 0,
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: "36px",
-  letterSpacing: "9px",
-  marginBottom: "36px",
+  fontSize: "28px",
+  letterSpacing: "6px",
+  marginBottom: "18px",
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "grid",
+  display: "flex",
+  flexDirection: "row",
   gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
 };
 
 const menuStyle: CSSProperties = {
-  width: "100%",
   padding: "14px 16px",
   borderRadius: "10px",
   border: "1px solid rgba(255,255,255,0.06)",
@@ -468,6 +469,8 @@ const menuStyle: CSSProperties = {
   textAlign: "left",
   fontWeight: "bold",
   cursor: "pointer",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
 };
 
 const menuActiveStyle: CSSProperties = {
@@ -477,20 +480,25 @@ const menuActiveStyle: CSSProperties = {
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: "40px",
+  padding: "16px",
   overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 const heroStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "20px",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "16px",
   alignItems: "center",
-  padding: "28px",
-  borderRadius: "22px",
+  padding: "18px",
+  borderRadius: "18px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
-  marginBottom: "24px",
+  marginBottom: "20px",
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -503,62 +511,71 @@ const eyebrowStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   margin: 0,
-  fontSize: "46px",
-  lineHeight: 1,
+  fontSize: "32px",
+  lineHeight: 1.08,
+  wordBreak: "break-word",
 };
 
 const subtitleStyle: CSSProperties = {
-  maxWidth: "720px",
+  maxWidth: "100%",
   marginTop: "14px",
   marginBottom: 0,
   opacity: 0.85,
-  fontSize: "17px",
+  fontSize: "16px",
   lineHeight: 1.45,
+  wordBreak: "break-word",
 };
 
 const heroActionsStyle: CSSProperties = {
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "12px",
-  flexWrap: "wrap",
+  width: "100%",
 };
 
 const resumoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: "12px",
   marginBottom: "20px",
 };
 
 const resumoCardStyle: CSSProperties = {
-  padding: "20px",
+  padding: "18px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  minWidth: 0,
+  overflow: "hidden",
+  wordBreak: "break-word",
 };
 
 const resumoNumeroStyle: CSSProperties = {
-  fontSize: "34px",
+  fontSize: "32px",
   fontWeight: "bold",
   marginBottom: "8px",
+  wordBreak: "break-word",
 };
 
 const duasColunasStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1.35fr 1fr",
-  gap: "20px",
+  gridTemplateColumns: "1fr",
+  gap: "18px",
 };
 
 const cardStyle: CSSProperties = {
-  padding: "24px",
-  borderRadius: "18px",
+  padding: "18px",
+  borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const cardHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "16px",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
   alignItems: "flex-start",
   marginBottom: "18px",
 };
@@ -567,11 +584,13 @@ const cardTextStyle: CSSProperties = {
   opacity: 0.75,
   marginTop: "8px",
   marginBottom: 0,
+  lineHeight: 1.45,
+  wordBreak: "break-word",
 };
 
 const filtrosStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1.5fr 1fr",
+  gridTemplateColumns: "1fr",
   gap: "12px",
   marginBottom: "18px",
 };
@@ -584,6 +603,8 @@ const inputStyle: CSSProperties = {
   background: "rgba(255,255,255,0.06)",
   color: "white",
   outline: "none",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const selectStyle: CSSProperties = {
@@ -594,6 +615,8 @@ const selectStyle: CSSProperties = {
   background: "rgba(255,255,255,0.06)",
   color: "white",
   outline: "none",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const optionStyle: CSSProperties = {
@@ -605,21 +628,32 @@ const processoCardStyle: CSSProperties = {
   borderRadius: "14px",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
-  display: "flex",
-  justifyContent: "space-between",
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "14px",
+  minWidth: 0,
+  overflow: "hidden",
+};
+
+const processoRightStyle: CSSProperties = {
+  display: "grid",
+  gap: "8px",
+  justifyItems: "start",
+  minWidth: 0,
 };
 
 const processoTituloStyle: CSSProperties = {
   fontSize: "17px",
   fontWeight: "bold",
   marginBottom: "6px",
+  wordBreak: "break-word",
 };
 
 const subtextoStyle: CSSProperties = {
   opacity: 0.78,
   fontSize: "14px",
   marginTop: "4px",
+  wordBreak: "break-word",
 };
 
 const entregaCardStyle: CSSProperties = {
@@ -627,9 +661,11 @@ const entregaCardStyle: CSSProperties = {
   borderRadius: "14px",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
-  display: "flex",
-  justifyContent: "space-between",
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "12px",
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const dataEntregaStyle: CSSProperties = {
@@ -638,6 +674,7 @@ const dataEntregaStyle: CSSProperties = {
   borderRadius: "10px",
   background: "rgba(92,115,199,0.18)",
   height: "fit-content",
+  width: "fit-content",
 };
 
 const botaoPrincipalStyle: CSSProperties = {
@@ -648,6 +685,8 @@ const botaoPrincipalStyle: CSSProperties = {
   padding: "13px 18px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoSecundarioStyle: CSSProperties = {
@@ -658,6 +697,8 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const mensagemStyle: CSSProperties = {
@@ -666,6 +707,7 @@ const mensagemStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(180,50,50,0.18)",
   border: "1px solid rgba(180,50,50,0.35)",
+  wordBreak: "break-word",
 };
 
 const badgeStyle: CSSProperties = {
@@ -674,6 +716,7 @@ const badgeStyle: CSSProperties = {
   borderRadius: "999px",
   fontSize: "12px",
   fontWeight: "bold",
+  width: "fit-content",
 };
 
 const badgeNeutroStyle: CSSProperties = {
