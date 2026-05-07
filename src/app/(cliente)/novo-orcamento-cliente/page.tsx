@@ -276,9 +276,9 @@ export default function NovoOrcamentoClientePage() {
 
       <section style={contentStyle}>
         <div style={topBarStyle}>
-          <div>
-            <h1 style={{ fontSize: "38px", margin: 0 }}>Novo Orçamento</h1>
-            <p style={{ opacity: 0.8, marginTop: "10px" }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={titleStyle}>Novo Orçamento</h1>
+            <p style={subtitleStyle}>
               Preenche os dados da obra e adiciona os artigos pretendidos.
             </p>
           </div>
@@ -304,12 +304,12 @@ export default function NovoOrcamentoClientePage() {
           <h2 style={{ marginTop: 0 }}>Dados da Obra</h2>
 
           <div style={gridStyle}>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={labelStyle}>Cliente</label>
               <input value={nomeCliente} disabled style={inputStyle} />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={labelStyle}>Nome da Obra</label>
               <input
                 value={nomeObra}
@@ -319,7 +319,7 @@ export default function NovoOrcamentoClientePage() {
               />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={labelStyle}>Localização</label>
               <input
                 value={localizacao}
@@ -367,16 +367,16 @@ export default function NovoOrcamentoClientePage() {
             <div style={{ display: "grid", gap: "12px" }}>
               {artigos.map((artigo) => (
                 <div key={artigo.id} style={artigoCardStyle}>
-                  <div>
-                    <div style={{ fontWeight: "bold", fontSize: "17px" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: "bold", fontSize: "17px", wordBreak: "break-word" }}>
                       {artigo.nome}
                     </div>
-                    <div style={{ opacity: 0.75, marginTop: "4px" }}>
+                    <div style={{ opacity: 0.75, marginTop: "4px", wordBreak: "break-word" }}>
                       {artigo.resumo || "Ainda por configurar"}
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <div style={artigoAcoesStyle}>
                     <button onClick={() => configurarArtigo(artigo)} style={botaoSecundarioStyle}>
                       Configurar
                     </button>
@@ -391,7 +391,7 @@ export default function NovoOrcamentoClientePage() {
           )}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={submeterWrapStyle}>
           <button
             onClick={submeterPedido}
             disabled={aSubmeter}
@@ -407,32 +407,39 @@ export default function NovoOrcamentoClientePage() {
 
 const mainStyle: CSSProperties = {
   display: "flex",
+  flexDirection: "column",
   minHeight: "100dvh",
+  overflowX: "hidden",
   background: "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: "260px",
-  padding: "30px 20px",
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
   background: "rgba(0,0,0,0.14)",
-  borderRight: "1px solid rgba(255,255,255,0.08)",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
+  flexShrink: 0,
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: "36px",
-  letterSpacing: "9px",
-  marginBottom: "36px",
+  fontSize: "28px",
+  letterSpacing: "6px",
+  marginBottom: "18px",
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "grid",
+  display: "flex",
+  flexDirection: "row",
   gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
 };
 
 const menuStyle: CSSProperties = {
-  width: "100%",
   padding: "14px 16px",
   borderRadius: "10px",
   border: "1px solid rgba(255,255,255,0.06)",
@@ -441,6 +448,8 @@ const menuStyle: CSSProperties = {
   textAlign: "left",
   fontWeight: "bold",
   cursor: "pointer",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
 };
 
 const menuActiveStyle: CSSProperties = {
@@ -450,33 +459,60 @@ const menuActiveStyle: CSSProperties = {
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: "40px",
+  padding: "16px",
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 const topBarStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "16px",
-  marginBottom: "24px",
-};
-
-const cardStyle: CSSProperties = {
-  padding: "24px",
+  marginBottom: "20px",
+  padding: "18px",
   borderRadius: "18px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+const titleStyle: CSSProperties = {
+  fontSize: "32px",
+  lineHeight: 1.08,
+  margin: 0,
+  wordBreak: "break-word",
+};
+
+const subtitleStyle: CSSProperties = {
+  opacity: 0.8,
+  marginTop: "10px",
+  marginBottom: 0,
+  lineHeight: 1.45,
+  wordBreak: "break-word",
+};
+
+const cardStyle: CSSProperties = {
+  padding: "18px",
+  borderRadius: "16px",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: "20px",
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const gridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: "14px",
 };
 
 const tiposGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: "14px",
 };
 
@@ -493,6 +529,8 @@ const inputStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.10)",
   background: "rgba(255,255,255,0.06)",
   color: "white",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const artigoCardStyle: CSSProperties = {
@@ -500,9 +538,18 @@ const artigoCardStyle: CSSProperties = {
   borderRadius: "14px",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "16px",
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+  minWidth: 0,
+  overflow: "hidden",
+};
+
+const artigoAcoesStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+  width: "100%",
 };
 
 const botaoTipoStyle: CSSProperties = {
@@ -513,6 +560,8 @@ const botaoTipoStyle: CSSProperties = {
   color: "white",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoPrincipalStyle: CSSProperties = {
@@ -524,6 +573,8 @@ const botaoPrincipalStyle: CSSProperties = {
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoSecundarioStyle: CSSProperties = {
@@ -534,6 +585,8 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoRemoverStyle: CSSProperties = {
@@ -544,6 +597,13 @@ const botaoRemoverStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const submeterWrapStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
 };
 
 const mensagemSucessoStyle: CSSProperties = {
@@ -552,6 +612,7 @@ const mensagemSucessoStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(63,163,107,0.16)",
   border: "1px solid rgba(63,163,107,0.35)",
+  wordBreak: "break-word",
 };
 
 const mensagemErroStyle: CSSProperties = {
@@ -560,4 +621,5 @@ const mensagemErroStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(180,50,50,0.18)",
   border: "1px solid rgba(180,50,50,0.35)",
+  wordBreak: "break-word",
 };

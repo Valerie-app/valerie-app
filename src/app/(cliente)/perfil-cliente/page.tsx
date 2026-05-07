@@ -146,9 +146,9 @@ export default function PerfilClientePage() {
       </aside>
 
       <section style={contentStyle}>
-        <div style={{ marginBottom: "30px" }}>
-          <h1 style={{ fontSize: "38px", margin: 0 }}>Perfil</h1>
-          <p style={{ opacity: 0.8, marginTop: "10px" }}>
+        <div style={heroStyle}>
+          <h1 style={titleStyle}>Perfil</h1>
+          <p style={subtitleStyle}>
             Consulte os dados da sua conta e informação de cliente.
           </p>
         </div>
@@ -218,7 +218,7 @@ export default function PerfilClientePage() {
 
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Sessão</h2>
-            <p style={{ opacity: 0.85, marginBottom: "18px" }}>
+            <p style={{ opacity: 0.85, marginBottom: "18px", lineHeight: 1.45 }}>
               Pode terminar sessão em qualquer momento.
             </p>
 
@@ -247,28 +247,33 @@ const mainStyle: CSSProperties = {
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
+  flexDirection: "column",
+  overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: "260px",
-  minHeight: "100dvh",
-  borderRight: "1px solid rgba(255,255,255,0.08)",
+  width: "100%",
+  minHeight: "auto",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(0,0,0,0.12)",
-  padding: "30px 20px",
+  padding: "18px 16px",
+  boxSizing: "border-box",
   flexShrink: 0,
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: "38px",
-  letterSpacing: "10px",
-  marginBottom: "40px",
+  fontSize: "28px",
+  letterSpacing: "6px",
+  marginBottom: "18px",
 };
 
 const menuContainerStyle: CSSProperties = {
   display: "flex",
-  flexDirection: "column",
+  flexDirection: "row",
   gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
 };
 
 const menuButtonStyle: CSSProperties = {
@@ -280,6 +285,8 @@ const menuButtonStyle: CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
   fontSize: "16px",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
 };
 
 const menuButtonAtivoStyle: CSSProperties = {
@@ -288,7 +295,36 @@ const menuButtonAtivoStyle: CSSProperties = {
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: "40px",
+  padding: "16px",
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const heroStyle: CSSProperties = {
+  marginBottom: "20px",
+  padding: "18px",
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+const titleStyle: CSSProperties = {
+  fontSize: "32px",
+  lineHeight: 1.08,
+  margin: 0,
+  wordBreak: "break-word",
+};
+
+const subtitleStyle: CSSProperties = {
+  opacity: 0.8,
+  marginTop: "10px",
+  marginBottom: 0,
+  lineHeight: 1.45,
+  wordBreak: "break-word",
 };
 
 const gridStyle: CSSProperties = {
@@ -298,15 +334,17 @@ const gridStyle: CSSProperties = {
 };
 
 const cardStyle: CSSProperties = {
-  padding: "24px",
+  padding: "18px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const infoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: "12px",
 };
 
@@ -315,6 +353,8 @@ const infoCardStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const labelStyle: CSSProperties = {
@@ -331,7 +371,7 @@ const valorStyle: CSSProperties = {
 
 const atalhosGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: "14px",
 };
 
@@ -343,6 +383,8 @@ const atalhoStyle: CSSProperties = {
   color: "white",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoPerigoStyle: CSSProperties = {
@@ -354,6 +396,8 @@ const botaoPerigoStyle: CSSProperties = {
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const mensagemErroStyle: CSSProperties = {
@@ -363,4 +407,5 @@ const mensagemErroStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(180,50,50,0.18)",
   border: "1px solid rgba(180,50,50,0.35)",
+  wordBreak: "break-word",
 };
