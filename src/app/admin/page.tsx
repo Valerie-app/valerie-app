@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import LogoutButton from "@/components/LogoutButton";
+import AdminSidebar from "@/components/AdminSidebar";
 
 type Processo = {
   id: string;
@@ -136,15 +136,9 @@ export default function AdminDashboardPage() {
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
   const [ordenacao, setOrdenacao] = useState<Ordenacao>("dias_desc");
 
-  const [valorFinalEdit, setValorFinalEdit] = useState<Record<string, string>>(
-    {}
-  );
-  const [notasAdminEdit, setNotasAdminEdit] = useState<Record<string, string>>(
-    {}
-  );
-  const [custoEstimadoEdit, setCustoEstimadoEdit] = useState<
-    Record<string, string>
-  >({});
+  const [valorFinalEdit, setValorFinalEdit] = useState<Record<string, string>>({});
+  const [notasAdminEdit, setNotasAdminEdit] = useState<Record<string, string>>({});
+  const [custoEstimadoEdit, setCustoEstimadoEdit] = useState<Record<string, string>>({});
 
   useEffect(() => {
     function atualizarLargura() {
@@ -163,10 +157,7 @@ export default function AdminDashboardPage() {
     void validarAdmin();
   }, []);
 
-  function mostrarMensagem(
-    texto: string,
-    tipo: "sucesso" | "erro" = "sucesso"
-  ) {
+  function mostrarMensagem(texto: string, tipo: "sucesso" | "erro" = "sucesso") {
     setMensagem(texto);
     setTipoMensagem(tipo);
   }
@@ -709,6 +700,8 @@ export default function AdminDashboardPage() {
   if (aVerificar) {
     return (
       <main style={mainStyle(eDesktop)}>
+        <AdminSidebar />
+
         <section style={contentStyle(eDesktop, eTablet)}>
           <h1 style={{ marginTop: 0 }}>Dashboard Admin</h1>
           <p style={{ opacity: 0.8 }}>A verificar acesso...</p>
@@ -719,46 +712,7 @@ export default function AdminDashboardPage() {
 
   return (
     <main style={mainStyle(eDesktop)}>
-      <aside style={asideStyle(eDesktop)}>
-        <div style={logoStyle(eDesktop)}>VALERIE</div>
-
-        <div style={menuContainerStyle(eDesktop)}>
-          <a
-            href="/admin"
-            style={{ ...menuStyle(eDesktop), background: "rgba(255,255,255,0.08)" }}
-          >
-            Dashboard
-          </a>
-
-          <a href="/admin/processos" style={menuStyle(eDesktop)}>
-            Processos
-          </a>
-
-          <a href="/admin/clientes" style={menuStyle(eDesktop)}>
-            Clientes
-          </a>
-
-          <a href="/admin/precos" style={menuStyle(eDesktop)}>
-            Preços
-          </a>
-
-          <a href="/admin/financeiro" style={menuStyle(eDesktop)}>
-            Financeiro
-          </a>
-
-          <a href="/admin/calendario" style={menuStyle(eDesktop)}>
-            Calendário
-          </a>
-
-          <a href="/aprovacao-clientes" style={menuStyle(eDesktop)}>
-            Aprovação Clientes
-          </a>
-        </div>
-
-        <div style={{ marginTop: "16px" }}>
-          <LogoutButton label="Terminar Sessão" fullWidth />
-        </div>
-      </aside>
+      <AdminSidebar />
 
       <section style={contentStyle(eDesktop, eTablet)}>
         <div style={heroStyle(eDesktop)}>
@@ -1389,6 +1343,8 @@ export default function AdminDashboardPage() {
   );
 }
 
+/* Mantive os teus styles abaixo. O aside/menu antigos podem ficar sem problema. */
+
 const mainStyle = (eDesktop: boolean): CSSProperties => ({
   minHeight: "100dvh",
   background:
@@ -1398,16 +1354,6 @@ const mainStyle = (eDesktop: boolean): CSSProperties => ({
   flexDirection: eDesktop ? "row" : "column",
   overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
-});
-
-const asideStyle = (eDesktop: boolean): CSSProperties => ({
-  width: eDesktop ? "260px" : "100%",
-  minHeight: eDesktop ? "100dvh" : "auto",
-  borderRight: eDesktop ? "1px solid rgba(255,255,255,0.08)" : "none",
-  borderBottom: eDesktop ? "none" : "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(0,0,0,0.12)",
-  padding: eDesktop ? "30px 20px" : "18px 16px",
-  flexShrink: 0,
 });
 
 const contentStyle = (eDesktop: boolean, eTablet: boolean): CSSProperties => ({
@@ -1458,31 +1404,6 @@ const heroMetaStyle: CSSProperties = {
   fontSize: "13px",
   opacity: 0.72,
 };
-
-const logoStyle = (eDesktop: boolean): CSSProperties => ({
-  fontSize: eDesktop ? "38px" : "28px",
-  letterSpacing: eDesktop ? "10px" : "6px",
-  marginBottom: eDesktop ? "40px" : "18px",
-});
-
-const menuContainerStyle = (eDesktop: boolean): CSSProperties => ({
-  display: "flex",
-  flexDirection: eDesktop ? "column" : "row",
-  gap: "12px",
-  overflowX: eDesktop ? "visible" : "auto",
-  paddingBottom: eDesktop ? 0 : "4px",
-});
-
-const menuStyle = (eDesktop: boolean): CSSProperties => ({
-  padding: "12px 14px",
-  borderRadius: "10px",
-  background: "rgba(255,255,255,0.04)",
-  color: "white",
-  textDecoration: "none",
-  whiteSpace: "nowrap",
-  fontSize: eDesktop ? "16px" : "14px",
-  flexShrink: 0,
-});
 
 const resumoGridStyle = (eDesktop: boolean, eTablet: boolean): CSSProperties => ({
   display: "grid",
