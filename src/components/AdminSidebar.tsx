@@ -9,37 +9,14 @@ export default function AdminSidebar() {
       <div style={logoStyle}>VALERIE</div>
 
       <div style={menuContainerStyle}>
-        <a href="/admin" style={menuStyle}>
-          Dashboard
-        </a>
-
-        <a href="/admin/processos" style={menuStyle}>
-          Processos
-        </a>
-
-        <a href="/admin/clientes" style={menuStyle}>
-          Clientes
-        </a>
-
-        <a href="/admin/precos" style={menuStyle}>
-          Preços
-        </a>
-
-        <a href="/admin/financeiro" style={menuStyle}>
-          Financeiro
-        </a>
-
-        <a href="/admin/calendario" style={menuStyle}>
-          Calendário
-        </a>
-
-        <a href="/aprovacao-clientes" style={menuStyle}>
-          Aprovação Clientes
-        </a>
-
-        <a href="/admin/importar-val" style={menuStyle}>
-          Importar VAL
-        </a>
+        <a href="/admin" style={menuStyle}>Dashboard</a>
+        <a href="/admin/processos" style={menuStyle}>Processos</a>
+        <a href="/admin/clientes" style={menuStyle}>Clientes</a>
+        <a href="/admin/precos" style={menuStyle}>Preços</a>
+        <a href="/admin/financeiro" style={menuStyle}>Financeiro</a>
+        <a href="/admin/calendario" style={menuStyle}>Calendário</a>
+        <a href="/admin/importar-val" style={menuStyle}>Importar VAL</a>
+        <a href="/aprovacao-clientes" style={menuStyle}>Aprovação Clientes</a>
       </div>
 
       <div style={{ marginTop: "20px" }}>
