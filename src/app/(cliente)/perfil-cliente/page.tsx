@@ -27,9 +27,21 @@ export default function PerfilClientePage() {
   const [cliente, setCliente] = useState<ClienteDB | null>(null);
   const [aVerificar, setAVerificar] = useState(true);
   const [mensagem, setMensagem] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     validarCliente();
+  }, []);
+
+  useEffect(() => {
+    function verificarTamanho() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    verificarTamanho();
+    window.addEventListener("resize", verificarTamanho);
+
+    return () => window.removeEventListener("resize", verificarTamanho);
   }, []);
 
   async function validarCliente() {
@@ -108,8 +120,8 @@ export default function PerfilClientePage() {
 
   if (aVerificar) {
     return (
-      <main style={mainStyle}>
-        <section style={contentStyle}>
+      <main style={isMobile ? mainMobileStyle : mainStyle}>
+        <section style={isMobile ? contentMobileStyle : contentStyle}>
           <div style={cardStyle}>
             <h1 style={{ marginTop: 0 }}>Perfil</h1>
             <p style={{ opacity: 0.8 }}>A verificar sessão...</p>
@@ -120,18 +132,18 @@ export default function PerfilClientePage() {
   }
 
   return (
-    <main style={mainStyle}>
-      <aside style={asideStyle}>
-        <div style={logoStyle}>VALERIE</div>
+    <main style={isMobile ? mainMobileStyle : mainStyle}>
+      <aside style={isMobile ? asideMobileStyle : asideStyle}>
+        <div style={isMobile ? logoMobileStyle : logoStyle}>VALERIE</div>
 
-        <div style={menuContainerStyle}>
+        <div style={isMobile ? menuContainerMobileStyle : menuContainerStyle}>
           {menu.map((item) => (
             <button
               key={item.path}
               type="button"
               onClick={() => navegar(item.path)}
               style={{
-                ...menuButtonStyle,
+                ...(isMobile ? menuButtonMobileStyle : menuButtonStyle),
                 ...(pathname === item.path ? menuButtonAtivoStyle : {}),
               }}
             >
@@ -145,21 +157,27 @@ export default function PerfilClientePage() {
         </div>
       </aside>
 
-      <section style={contentStyle}>
-        <div style={heroStyle}>
-          <h1 style={titleStyle}>Perfil</h1>
-          <p style={subtitleStyle}>
+      <section style={isMobile ? contentMobileStyle : contentStyle}>
+        <div style={isMobile ? headerMobileStyle : { marginBottom: "30px" }}>
+          <h1 style={isMobile ? titleMobileStyle : { fontSize: "38px", margin: 0 }}>
+            Perfil
+          </h1>
+          <p style={{ opacity: 0.8, marginTop: "10px", lineHeight: 1.45 }}>
             Consulte os dados da sua conta e informação de cliente.
           </p>
         </div>
 
-        {mensagem && <div style={mensagemErroStyle}>{mensagem}</div>}
+        {mensagem && (
+          <div style={isMobile ? mensagemErroMobileStyle : mensagemErroStyle}>
+            {mensagem}
+          </div>
+        )}
 
-        <div style={gridStyle}>
-          <div style={cardStyle}>
+        <div style={isMobile ? gridMobileStyle : gridStyle}>
+          <div style={isMobile ? cardMobileStyle : cardStyle}>
             <h2 style={{ marginTop: 0 }}>Dados da Conta</h2>
 
-            <div style={infoGridStyle}>
+            <div style={isMobile ? infoGridMobileStyle : infoGridStyle}>
               <Info label="Nome" valor={cliente?.nome} />
               <Info label="Email" valor={cliente?.email} />
               <Info label="Estado" valor={cliente?.estado || "—"} />
@@ -172,10 +190,10 @@ export default function PerfilClientePage() {
             </div>
           </div>
 
-          <div style={cardStyle}>
+          <div style={isMobile ? cardMobileStyle : cardStyle}>
             <h2 style={{ marginTop: 0 }}>Dados Fiscais e Contacto</h2>
 
-            <div style={infoGridStyle}>
+            <div style={isMobile ? infoGridMobileStyle : infoGridStyle}>
               <Info label="NIF / ID fiscal" valor={cliente?.nif} />
               <Info label="Contacto" valor={cliente?.contacto} />
               <Info label="Morada" valor={cliente?.morada} />
@@ -186,14 +204,14 @@ export default function PerfilClientePage() {
             </div>
           </div>
 
-          <div style={cardStyle}>
+          <div style={isMobile ? cardMobileStyle : cardStyle}>
             <h2 style={{ marginTop: 0 }}>Acesso Rápido</h2>
 
-            <div style={atalhosGridStyle}>
+            <div style={isMobile ? atalhosGridMobileStyle : atalhosGridStyle}>
               <button
                 type="button"
                 onClick={() => navegar("/novo-orcamento-cliente")}
-                style={atalhoStyle}
+                style={isMobile ? atalhoMobileStyle : atalhoStyle}
               >
                 Novo Orçamento
               </button>
@@ -201,7 +219,7 @@ export default function PerfilClientePage() {
               <button
                 type="button"
                 onClick={() => navegar("/processos-cliente")}
-                style={atalhoStyle}
+                style={isMobile ? atalhoMobileStyle : atalhoStyle}
               >
                 Processos
               </button>
@@ -209,20 +227,20 @@ export default function PerfilClientePage() {
               <button
                 type="button"
                 onClick={() => navegar("/dashboard-cliente")}
-                style={atalhoStyle}
+                style={isMobile ? atalhoMobileStyle : atalhoStyle}
               >
                 Dashboard
               </button>
             </div>
           </div>
 
-          <div style={cardStyle}>
+          <div style={isMobile ? cardMobileStyle : cardStyle}>
             <h2 style={{ marginTop: 0 }}>Sessão</h2>
-            <p style={{ opacity: 0.85, marginBottom: "18px", lineHeight: 1.45 }}>
+            <p style={{ opacity: 0.85, marginBottom: "18px" }}>
               Pode terminar sessão em qualquer momento.
             </p>
 
-            <button onClick={terminarSessao} style={botaoPerigoStyle}>
+            <button onClick={terminarSessao} style={isMobile ? botaoPerigoMobileStyle : botaoPerigoStyle}>
               Terminar Sessão
             </button>
           </div>
@@ -241,39 +259,37 @@ function Info({ label, valor }: { label: string; valor?: string | null }) {
   );
 }
 
+/* DESKTOP ORIGINAL — MANTIDO COMO ESTAVA */
+
 const mainStyle: CSSProperties = {
   minHeight: "100dvh",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
-  flexDirection: "column",
-  overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: "100%",
-  minHeight: "auto",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  width: "260px",
+  minHeight: "100dvh",
+  borderRight: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(0,0,0,0.12)",
-  padding: "18px 16px",
-  boxSizing: "border-box",
+  padding: "30px 20px",
   flexShrink: 0,
+  boxSizing: "border-box",
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: "28px",
-  letterSpacing: "6px",
-  marginBottom: "18px",
+  fontSize: "38px",
+  letterSpacing: "10px",
+  marginBottom: "40px",
 };
 
 const menuContainerStyle: CSSProperties = {
   display: "flex",
-  flexDirection: "row",
+  flexDirection: "column",
   gap: "12px",
-  overflowX: "auto",
-  paddingBottom: "6px",
 };
 
 const menuButtonStyle: CSSProperties = {
@@ -285,8 +301,6 @@ const menuButtonStyle: CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
   fontSize: "16px",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
 };
 
 const menuButtonAtivoStyle: CSSProperties = {
@@ -295,36 +309,7 @@ const menuButtonAtivoStyle: CSSProperties = {
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: "16px",
-  overflowX: "hidden",
-  width: "100%",
-  maxWidth: "100%",
-  boxSizing: "border-box",
-};
-
-const heroStyle: CSSProperties = {
-  marginBottom: "20px",
-  padding: "18px",
-  borderRadius: "18px",
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  overflow: "hidden",
-  boxSizing: "border-box",
-};
-
-const titleStyle: CSSProperties = {
-  fontSize: "32px",
-  lineHeight: 1.08,
-  margin: 0,
-  wordBreak: "break-word",
-};
-
-const subtitleStyle: CSSProperties = {
-  opacity: 0.8,
-  marginTop: "10px",
-  marginBottom: 0,
-  lineHeight: 1.45,
-  wordBreak: "break-word",
+  padding: "40px",
 };
 
 const gridStyle: CSSProperties = {
@@ -334,17 +319,15 @@ const gridStyle: CSSProperties = {
 };
 
 const cardStyle: CSSProperties = {
-  padding: "18px",
+  padding: "24px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
-  overflow: "hidden",
-  boxSizing: "border-box",
 };
 
 const infoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "12px",
 };
 
@@ -353,8 +336,6 @@ const infoCardStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
-  minWidth: 0,
-  overflow: "hidden",
 };
 
 const labelStyle: CSSProperties = {
@@ -371,7 +352,7 @@ const valorStyle: CSSProperties = {
 
 const atalhosGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
   gap: "14px",
 };
 
@@ -383,8 +364,6 @@ const atalhoStyle: CSSProperties = {
   color: "white",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
-  boxSizing: "border-box",
 };
 
 const botaoPerigoStyle: CSSProperties = {
@@ -396,8 +375,6 @@ const botaoPerigoStyle: CSSProperties = {
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
-  width: "100%",
-  boxSizing: "border-box",
 };
 
 const mensagemErroStyle: CSSProperties = {
@@ -407,5 +384,113 @@ const mensagemErroStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(180,50,50,0.18)",
   border: "1px solid rgba(180,50,50,0.35)",
+};
+
+/* MOBILE — SÓ AQUI É QUE MUDA */
+
+const mainMobileStyle: CSSProperties = {
+  ...mainStyle,
+  flexDirection: "column",
+  overflowX: "hidden",
+};
+
+const asideMobileStyle: CSSProperties = {
+  width: "100%",
+  minHeight: "auto",
+  borderRight: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(0,0,0,0.12)",
+  padding: "18px 16px",
+  flexShrink: 0,
+  boxSizing: "border-box",
+};
+
+const logoMobileStyle: CSSProperties = {
+  fontSize: "28px",
+  letterSpacing: "6px",
+  marginBottom: "18px",
+};
+
+const menuContainerMobileStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
+};
+
+const menuButtonMobileStyle: CSSProperties = {
+  ...menuButtonStyle,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+  width: "auto",
+};
+
+const contentMobileStyle: CSSProperties = {
+  flex: 1,
+  padding: "16px",
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const headerMobileStyle: CSSProperties = {
+  marginBottom: "20px",
+  padding: "18px",
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+const titleMobileStyle: CSSProperties = {
+  fontSize: "32px",
+  lineHeight: 1.08,
+  margin: 0,
+  wordBreak: "break-word",
+};
+
+const gridMobileStyle: CSSProperties = {
+  maxWidth: "100%",
+  display: "grid",
+  gap: "20px",
+};
+
+const cardMobileStyle: CSSProperties = {
+  ...cardStyle,
+  padding: "18px",
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+const infoGridMobileStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "12px",
+};
+
+const atalhosGridMobileStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+};
+
+const atalhoMobileStyle: CSSProperties = {
+  ...atalhoStyle,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const botaoPerigoMobileStyle: CSSProperties = {
+  ...botaoPerigoStyle,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const mensagemErroMobileStyle: CSSProperties = {
+  ...mensagemErroStyle,
+  maxWidth: "100%",
   wordBreak: "break-word",
 };

@@ -52,6 +52,18 @@ export default function DashboardClientePage() {
   const [mensagem, setMensagem] = useState("");
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function verificarTamanho() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    verificarTamanho();
+    window.addEventListener("resize", verificarTamanho);
+
+    return () => window.removeEventListener("resize", verificarTamanho);
+  }, []);
 
   useEffect(() => {
     async function validarCliente() {
@@ -215,8 +227,8 @@ export default function DashboardClientePage() {
 
   if (aVerificar) {
     return (
-      <main style={mainStyle}>
-        <section style={contentStyle}>
+      <main style={isMobile ? mainMobileStyle : mainStyle}>
+        <section style={isMobile ? contentMobileStyle : contentStyle}>
           <div style={cardStyle}>
             <h1 style={{ marginTop: 0 }}>Área Cliente</h1>
             <p style={{ opacity: 0.8 }}>A verificar sessão...</p>
@@ -227,18 +239,18 @@ export default function DashboardClientePage() {
   }
 
   return (
-    <main style={mainStyle}>
-      <aside style={asideStyle}>
-        <div style={logoStyle}>VALERIE</div>
+    <main style={isMobile ? mainMobileStyle : mainStyle}>
+      <aside style={isMobile ? asideMobileStyle : asideStyle}>
+        <div style={isMobile ? logoMobileStyle : logoStyle}>VALERIE</div>
 
-        <div style={menuContainerStyle}>
+        <div style={isMobile ? menuContainerMobileStyle : menuContainerStyle}>
           {menuCliente.map((item) => (
             <button
               key={item.path}
               type="button"
               onClick={() => router.push(item.path)}
               style={{
-                ...menuStyle,
+                ...(isMobile ? menuMobileStyle : menuStyle),
                 ...(pathname === item.path ? menuActiveStyle : {}),
               }}
             >
@@ -252,23 +264,23 @@ export default function DashboardClientePage() {
         </div>
       </aside>
 
-      <section style={contentStyle}>
-        <div style={heroStyle}>
+      <section style={isMobile ? contentMobileStyle : contentStyle}>
+        <div style={isMobile ? heroMobileStyle : heroStyle}>
           <div style={{ minWidth: 0 }}>
             <div style={eyebrowStyle}>Painel do Cliente</div>
-            <h1 style={titleStyle}>Área Cliente</h1>
+            <h1 style={isMobile ? titleMobileStyle : titleStyle}>Área Cliente</h1>
             <p style={subtitleStyle}>
               Bem-vindo, <strong>{nomeCliente}</strong>. Acompanhe os seus
               pedidos, estados, valores e próximas entregas.
             </p>
           </div>
 
-          <div style={heroActionsStyle}>
+          <div style={isMobile ? heroActionsMobileStyle : heroActionsStyle}>
             <button
               type="button"
               onClick={atualizarAgora}
               disabled={aAtualizar}
-              style={botaoSecundarioStyle}
+              style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}
             >
               {aAtualizar ? "A atualizar..." : "Atualizar"}
             </button>
@@ -276,7 +288,7 @@ export default function DashboardClientePage() {
             <button
               type="button"
               onClick={() => router.push("/novo-orcamento-cliente")}
-              style={botaoPrincipalStyle}
+              style={isMobile ? botaoPrincipalMobileStyle : botaoPrincipalStyle}
             >
               Novo Orçamento
             </button>
@@ -285,7 +297,7 @@ export default function DashboardClientePage() {
 
         {mensagem && <div style={mensagemStyle}>{mensagem}</div>}
 
-        <div style={resumoGridStyle}>
+        <div style={isMobile ? resumoGridMobileStyle : resumoGridStyle}>
           <div style={resumoCardStyle}>
             <div style={resumoNumeroStyle}>{resumo.total}</div>
             <div>Total de Processos</div>
@@ -314,9 +326,9 @@ export default function DashboardClientePage() {
           </div>
         </div>
 
-        <div style={duasColunasStyle}>
+        <div style={isMobile ? duasColunasMobileStyle : duasColunasStyle}>
           <div style={cardStyle}>
-            <div style={cardHeaderStyle}>
+            <div style={isMobile ? cardHeaderMobileStyle : cardHeaderStyle}>
               <div style={{ minWidth: 0 }}>
                 <h2 style={{ margin: 0 }}>Os Meus Processos</h2>
                 <p style={cardTextStyle}>
@@ -327,13 +339,13 @@ export default function DashboardClientePage() {
               <button
                 type="button"
                 onClick={() => router.push("/processos-cliente")}
-                style={botaoSecundarioStyle}
+                style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}
               >
                 Ver todos
               </button>
             </div>
 
-            <div style={filtrosStyle}>
+            <div style={isMobile ? filtrosMobileStyle : filtrosStyle}>
               <input
                 value={pesquisa}
                 onChange={(e) => setPesquisa(e.target.value)}
@@ -362,7 +374,7 @@ export default function DashboardClientePage() {
             ) : (
               <div style={{ display: "grid", gap: "12px" }}>
                 {processosFiltrados.slice(0, 5).map((processo) => (
-                  <div key={processo.id} style={processoCardStyle}>
+                  <div key={processo.id} style={isMobile ? processoCardMobileStyle : processoCardStyle}>
                     <div style={{ minWidth: 0 }}>
                       <div style={processoTituloStyle}>
                         {processo.nome_obra || "Sem nome de obra"}
@@ -377,7 +389,7 @@ export default function DashboardClientePage() {
                       </div>
                     </div>
 
-                    <div style={processoRightStyle}>
+                    <div style={isMobile ? processoRightMobileStyle : processoRightStyle}>
                       <div style={{ ...badgeStyle, ...estadoStyle(processo.estado) }}>
                         {processo.estado || "Sem estado"}
                       </div>
@@ -401,7 +413,7 @@ export default function DashboardClientePage() {
             ) : (
               <div style={{ display: "grid", gap: "12px" }}>
                 {resumo.proximasEntregas.map((processo) => (
-                  <div key={processo.id} style={entregaCardStyle}>
+                  <div key={processo.id} style={isMobile ? entregaCardMobileStyle : entregaCardStyle}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: "bold", wordBreak: "break-word" }}>
                         {processo.nome_obra || "Sem nome de obra"}
@@ -425,11 +437,12 @@ export default function DashboardClientePage() {
   );
 }
 
+
+/* DESKTOP ORIGINAL */
+
 const mainStyle: CSSProperties = {
   minHeight: "100dvh",
   display: "flex",
-  flexDirection: "column",
-  overflowX: "hidden",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
@@ -437,30 +450,28 @@ const mainStyle: CSSProperties = {
 };
 
 const asideStyle: CSSProperties = {
-  width: "100%",
-  minHeight: "auto",
-  padding: "18px 16px",
+  width: "260px",
+  minHeight: "100dvh",
+  padding: "30px 20px",
   background: "rgba(0,0,0,0.14)",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  borderRight: "1px solid rgba(255,255,255,0.08)",
   boxSizing: "border-box",
   flexShrink: 0,
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: "28px",
-  letterSpacing: "6px",
-  marginBottom: "18px",
+  fontSize: "36px",
+  letterSpacing: "9px",
+  marginBottom: "36px",
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "row",
+  display: "grid",
   gap: "12px",
-  overflowX: "auto",
-  paddingBottom: "6px",
 };
 
 const menuStyle: CSSProperties = {
+  width: "100%",
   padding: "14px 16px",
   borderRadius: "10px",
   border: "1px solid rgba(255,255,255,0.06)",
@@ -469,8 +480,6 @@ const menuStyle: CSSProperties = {
   textAlign: "left",
   fontWeight: "bold",
   cursor: "pointer",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
 };
 
 const menuActiveStyle: CSSProperties = {
@@ -480,25 +489,20 @@ const menuActiveStyle: CSSProperties = {
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: "16px",
+  padding: "40px",
   overflowX: "hidden",
-  width: "100%",
-  maxWidth: "100%",
-  boxSizing: "border-box",
 };
 
 const heroStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "16px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "20px",
   alignItems: "center",
-  padding: "18px",
-  borderRadius: "18px",
+  padding: "28px",
+  borderRadius: "22px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
-  marginBottom: "20px",
-  overflow: "hidden",
-  boxSizing: "border-box",
+  marginBottom: "24px",
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -511,37 +515,35 @@ const eyebrowStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   margin: 0,
-  fontSize: "32px",
-  lineHeight: 1.08,
-  wordBreak: "break-word",
+  fontSize: "46px",
+  lineHeight: 1,
 };
 
 const subtitleStyle: CSSProperties = {
-  maxWidth: "100%",
+  maxWidth: "720px",
   marginTop: "14px",
   marginBottom: 0,
   opacity: 0.85,
-  fontSize: "16px",
+  fontSize: "17px",
   lineHeight: 1.45,
   wordBreak: "break-word",
 };
 
 const heroActionsStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
+  display: "flex",
   gap: "12px",
-  width: "100%",
+  flexWrap: "wrap",
 };
 
 const resumoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
   gap: "12px",
   marginBottom: "20px",
 };
 
 const resumoCardStyle: CSSProperties = {
-  padding: "18px",
+  padding: "20px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -551,7 +553,7 @@ const resumoCardStyle: CSSProperties = {
 };
 
 const resumoNumeroStyle: CSSProperties = {
-  fontSize: "32px",
+  fontSize: "34px",
   fontWeight: "bold",
   marginBottom: "8px",
   wordBreak: "break-word",
@@ -559,13 +561,13 @@ const resumoNumeroStyle: CSSProperties = {
 
 const duasColunasStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "18px",
+  gridTemplateColumns: "1.35fr 1fr",
+  gap: "20px",
 };
 
 const cardStyle: CSSProperties = {
-  padding: "18px",
-  borderRadius: "16px",
+  padding: "24px",
+  borderRadius: "18px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   overflow: "hidden",
@@ -573,9 +575,9 @@ const cardStyle: CSSProperties = {
 };
 
 const cardHeaderStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "14px",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "16px",
   alignItems: "flex-start",
   marginBottom: "18px",
 };
@@ -590,7 +592,7 @@ const cardTextStyle: CSSProperties = {
 
 const filtrosStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1.5fr 1fr",
   gap: "12px",
   marginBottom: "18px",
 };
@@ -628,8 +630,8 @@ const processoCardStyle: CSSProperties = {
   borderRadius: "14px",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
-  display: "grid",
-  gridTemplateColumns: "1fr",
+  display: "flex",
+  justifyContent: "space-between",
   gap: "14px",
   minWidth: 0,
   overflow: "hidden",
@@ -638,7 +640,7 @@ const processoCardStyle: CSSProperties = {
 const processoRightStyle: CSSProperties = {
   display: "grid",
   gap: "8px",
-  justifyItems: "start",
+  justifyItems: "end",
   minWidth: 0,
 };
 
@@ -661,8 +663,8 @@ const entregaCardStyle: CSSProperties = {
   borderRadius: "14px",
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
-  display: "grid",
-  gridTemplateColumns: "1fr",
+  display: "flex",
+  justifyContent: "space-between",
   gap: "12px",
   minWidth: 0,
   overflow: "hidden",
@@ -685,8 +687,6 @@ const botaoPrincipalStyle: CSSProperties = {
   padding: "13px 18px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
-  boxSizing: "border-box",
 };
 
 const botaoSecundarioStyle: CSSProperties = {
@@ -697,8 +697,6 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
-  boxSizing: "border-box",
 };
 
 const mensagemStyle: CSSProperties = {
@@ -746,4 +744,129 @@ const badgeVermelhoStyle: CSSProperties = {
   background: "rgba(234,67,53,0.16)",
   border: "1px solid rgba(234,67,53,0.45)",
   color: "#ff9d9d",
+};
+
+/* MOBILE */
+
+const mainMobileStyle: CSSProperties = {
+  ...mainStyle,
+  flexDirection: "column",
+  overflowX: "hidden",
+};
+
+const asideMobileStyle: CSSProperties = {
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
+  background: "rgba(0,0,0,0.14)",
+  borderRight: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
+  flexShrink: 0,
+};
+
+const logoMobileStyle: CSSProperties = {
+  fontSize: "28px",
+  letterSpacing: "6px",
+  marginBottom: "18px",
+};
+
+const menuContainerMobileStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
+};
+
+const menuMobileStyle: CSSProperties = {
+  ...menuStyle,
+  width: "auto",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+const contentMobileStyle: CSSProperties = {
+  flex: 1,
+  padding: "16px",
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const heroMobileStyle: CSSProperties = {
+  ...heroStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  padding: "18px",
+  borderRadius: "18px",
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+const titleMobileStyle: CSSProperties = {
+  ...titleStyle,
+  fontSize: "32px",
+  lineHeight: 1.08,
+  wordBreak: "break-word",
+};
+
+const heroActionsMobileStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "12px",
+  width: "100%",
+};
+
+const resumoGridMobileStyle: CSSProperties = {
+  ...resumoGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const duasColunasMobileStyle: CSSProperties = {
+  ...duasColunasStyle,
+  gridTemplateColumns: "1fr",
+  gap: "18px",
+};
+
+const cardHeaderMobileStyle: CSSProperties = {
+  ...cardHeaderStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+};
+
+const filtrosMobileStyle: CSSProperties = {
+  ...filtrosStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const processoCardMobileStyle: CSSProperties = {
+  ...processoCardStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+};
+
+const processoRightMobileStyle: CSSProperties = {
+  ...processoRightStyle,
+  justifyItems: "start",
+};
+
+const entregaCardMobileStyle: CSSProperties = {
+  ...entregaCardStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+};
+
+const botaoPrincipalMobileStyle: CSSProperties = {
+  ...botaoPrincipalStyle,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const botaoSecundarioMobileStyle: CSSProperties = {
+  ...botaoSecundarioStyle,
+  width: "100%",
+  boxSizing: "border-box",
 };

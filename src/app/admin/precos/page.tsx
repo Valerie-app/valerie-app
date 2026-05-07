@@ -113,9 +113,21 @@ export default function AdminPrecosPage() {
   const [aVerificar, setAVerificar] = useState(true);
   const [aGuardar, setAGuardar] = useState(false);
   const [aSemear, setASemear] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     validarAdmin();
+  }, []);
+
+  useEffect(() => {
+    function verificarTamanho() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    verificarTamanho();
+    window.addEventListener("resize", verificarTamanho);
+
+    return () => window.removeEventListener("resize", verificarTamanho);
   }, []);
 
   async function validarAdmin() {
@@ -350,8 +362,8 @@ export default function AdminPrecosPage() {
 
   if (aVerificar) {
     return (
-      <main style={mainStyle}>
-        <section style={contentStyle}>
+      <main style={isMobile ? mainMobileStyle : mainStyle}>
+        <section style={isMobile ? contentMobileStyle : contentStyle}>
           <h1 style={{ marginTop: 0 }}>Tabela de Preços</h1>
           <p style={{ opacity: 0.8 }}>A verificar acesso...</p>
         </section>
@@ -360,43 +372,46 @@ export default function AdminPrecosPage() {
   }
 
   return (
-    <main style={mainStyle}>
-      <aside style={asideStyle}>
-        <div style={logoStyle}>VALERIE</div>
+    <main style={isMobile ? mainMobileStyle : mainStyle}>
+      <aside style={isMobile ? asideMobileStyle : asideStyle}>
+        <div style={isMobile ? logoMobileStyle : logoStyle}>VALERIE</div>
 
-        <div style={menuContainerStyle}>
-          <a href="/admin" style={menuStyle}>
+        <div style={isMobile ? menuContainerMobileStyle : menuContainerStyle}>
+          <a href="/admin" style={isMobile ? menuMobileStyle : menuStyle}>
             Dashboard
           </a>
 
-          <a href="/admin/processos" style={menuStyle}>
+          <a href="/admin/processos" style={isMobile ? menuMobileStyle : menuStyle}>
             Processos
           </a>
 
-          <a href="/admin/clientes" style={menuStyle}>
+          <a href="/admin/clientes" style={isMobile ? menuMobileStyle : menuStyle}>
             Clientes
           </a>
 
           <a
             href="/admin/precos"
-            style={{ ...menuStyle, background: "rgba(255,255,255,0.08)" }}
+            style={{
+              ...(isMobile ? menuMobileStyle : menuStyle),
+              background: "rgba(255,255,255,0.08)",
+            }}
           >
             Preços
           </a>
 
-          <a href="/admin/financeiro" style={menuStyle}>
+          <a href="/admin/financeiro" style={isMobile ? menuMobileStyle : menuStyle}>
             Financeiro
           </a>
 
-          <a href="/admin/calendario" style={menuStyle}>
+          <a href="/admin/calendario" style={isMobile ? menuMobileStyle : menuStyle}>
             Calendário
           </a>
 
-          <a href="/admin/importar-val" style={menuStyle}>
+          <a href="/admin/importar-val" style={isMobile ? menuMobileStyle : menuStyle}>
             Importar VAL
           </a>
 
-          <a href="/aprovacao-clientes" style={menuStyle}>
+          <a href="/aprovacao-clientes" style={isMobile ? menuMobileStyle : menuStyle}>
             Aprovação Clientes
           </a>
         </div>
@@ -406,9 +421,9 @@ export default function AdminPrecosPage() {
         </div>
       </aside>
 
-      <section style={contentStyle}>
+      <section style={isMobile ? contentMobileStyle : contentStyle}>
         <div style={headerStyle}>
-          <h1 style={tituloStyle}>Tabela de Preços</h1>
+          <h1 style={isMobile ? tituloMobileStyle : tituloStyle}>Tabela de Preços</h1>
           <p style={descricaoStyle}>
             Aqui define os preços internos da empresa. O cliente não vê qualquer
             valor na área dele.
@@ -418,11 +433,11 @@ export default function AdminPrecosPage() {
         {mensagem && <div style={mensagemStyle}>{mensagem}</div>}
 
         {aCarregar ? (
-          <div style={cardStyle}>
+          <div style={isMobile ? cardMobileStyle : cardStyle}>
             <p style={{ opacity: 0.75 }}>A carregar...</p>
           </div>
         ) : precos.length === 0 ? (
-          <div style={cardStyle}>
+          <div style={isMobile ? cardMobileStyle : cardStyle}>
             <h2 style={{ marginTop: 0 }}>Tabela Base</h2>
             <p style={{ opacity: 0.8 }}>
               Ainda não tens preços guardados no Supabase. Podes carregar já a tua
@@ -430,7 +445,7 @@ export default function AdminPrecosPage() {
             </p>
             <button
               onClick={carregarTabelaBase}
-              style={botaoPrincipalStyle}
+              style={isMobile ? botaoPrincipalMobileStyle : botaoPrincipalStyle}
               disabled={aSemear}
             >
               {aSemear ? "A carregar..." : "Carregar Tabela Base"}
@@ -439,8 +454,8 @@ export default function AdminPrecosPage() {
         ) : (
           <div style={listaCategoriasStyle}>
             {categoriasAgrupadas.map((categoria) => (
-              <div key={categoria.nome} style={cardStyle}>
-                <div style={categoriaHeaderStyle}>
+              <div key={categoria.nome} style={isMobile ? cardMobileStyle : cardStyle}>
+                <div style={isMobile ? categoriaHeaderMobileStyle : categoriaHeaderStyle}>
                   <div style={{ minWidth: 0 }}>
                     <h2 style={{ margin: 0, wordBreak: "break-word" }}>
                       {categoria.nome}
@@ -462,7 +477,7 @@ export default function AdminPrecosPage() {
 
                   <button
                     onClick={() => adicionarItem(categoria.nome)}
-                    style={botaoSecundarioStyle}
+                    style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}
                   >
                     + Adicionar Artigo
                   </button>
@@ -470,8 +485,8 @@ export default function AdminPrecosPage() {
 
                 <div style={{ display: "grid", gap: "12px" }}>
                   {categoria.itens.map((item) => (
-                    <div key={item.id} style={linhaPrecoStyle}>
-                      <div>
+                    <div key={item.id} style={isMobile ? linhaPrecoMobileStyle : linhaPrecoStyle}>
+                      <div style={{ minWidth: 0 }}>
                         <label style={labelStyle}>Nome do Artigo</label>
                         <input
                           value={item.nome}
@@ -482,7 +497,7 @@ export default function AdminPrecosPage() {
                         />
                       </div>
 
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <label style={labelStyle}>Valor Base</label>
                         <input
                           value={item.valor}
@@ -494,7 +509,7 @@ export default function AdminPrecosPage() {
                         />
                       </div>
 
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <label style={labelStyle}>Tipo de Medida</label>
                         <select
                           value={item.unidade}
@@ -517,7 +532,7 @@ export default function AdminPrecosPage() {
 
                       <button
                         onClick={() => removerItem(item)}
-                        style={botaoRemoverStyle}
+                        style={isMobile ? botaoRemoverMobileStyle : botaoRemoverStyle}
                       >
                         Remover
                       </button>
@@ -530,7 +545,7 @@ export default function AdminPrecosPage() {
             <div style={guardarWrapStyle}>
               <button
                 onClick={guardarAlteracoes}
-                style={botaoPrincipalStyle}
+                style={isMobile ? botaoPrincipalMobileStyle : botaoPrincipalStyle}
                 disabled={aGuardar}
               >
                 {aGuardar ? "A guardar..." : "Guardar Alterações"}
@@ -543,48 +558,43 @@ export default function AdminPrecosPage() {
   );
 }
 
+/* DESKTOP ORIGINAL */
+
 const mainStyle: CSSProperties = {
   minHeight: "100dvh",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
-  flexDirection: "column",
-  overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: "100%",
-  minHeight: "auto",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  width: "260px",
+  minHeight: "100dvh",
+  borderRight: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(0,0,0,0.12)",
-  padding: "18px 16px",
+  padding: "30px 20px",
   boxSizing: "border-box",
   flexShrink: 0,
 };
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: "16px",
+  padding: "40px",
   overflowX: "hidden",
-  width: "100%",
-  maxWidth: "100%",
-  boxSizing: "border-box",
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: "28px",
-  letterSpacing: "6px",
-  marginBottom: "18px",
+  fontSize: "38px",
+  letterSpacing: "10px",
+  marginBottom: "40px",
 };
 
 const menuContainerStyle: CSSProperties = {
   display: "flex",
-  flexDirection: "row",
+  flexDirection: "column",
   gap: "12px",
-  overflowX: "auto",
-  paddingBottom: "6px",
 };
 
 const menuStyle: CSSProperties = {
@@ -593,8 +603,6 @@ const menuStyle: CSSProperties = {
   background: "rgba(255,255,255,0.04)",
   color: "white",
   textDecoration: "none",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
   fontWeight: "bold",
 };
 
@@ -603,7 +611,7 @@ const headerStyle: CSSProperties = {
 };
 
 const tituloStyle: CSSProperties = {
-  fontSize: "30px",
+  fontSize: "38px",
   margin: 0,
   wordBreak: "break-word",
 };
@@ -622,22 +630,23 @@ const listaCategoriasStyle: CSSProperties = {
 };
 
 const categoriaHeaderStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "14px",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "18px",
   marginBottom: "18px",
 };
 
 const linhaPrecoStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1.4fr 0.7fr 0.8fr auto",
   gap: "12px",
   alignItems: "end",
   minWidth: 0,
 };
 
 const cardStyle: CSSProperties = {
-  padding: "18px",
+  padding: "24px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -683,8 +692,8 @@ const mensagemStyle: CSSProperties = {
 };
 
 const guardarWrapStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
+  display: "flex",
+  justifyContent: "flex-end",
   marginTop: "4px",
 };
 
@@ -697,7 +706,6 @@ const botaoPrincipalStyle: CSSProperties = {
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
-  width: "100%",
 };
 
 const botaoSecundarioStyle: CSSProperties = {
@@ -708,7 +716,7 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
+  whiteSpace: "nowrap",
 };
 
 const botaoRemoverStyle: CSSProperties = {
@@ -719,5 +727,95 @@ const botaoRemoverStyle: CSSProperties = {
   padding: "14px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+};
+
+/* MOBILE */
+
+const mainMobileStyle: CSSProperties = {
+  ...mainStyle,
+  flexDirection: "column",
+  overflowX: "hidden",
+};
+
+const asideMobileStyle: CSSProperties = {
   width: "100%",
+  minHeight: "auto",
+  borderRight: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(0,0,0,0.12)",
+  padding: "18px 16px",
+  boxSizing: "border-box",
+  flexShrink: 0,
+};
+
+const contentMobileStyle: CSSProperties = {
+  flex: 1,
+  padding: "16px",
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const logoMobileStyle: CSSProperties = {
+  fontSize: "28px",
+  letterSpacing: "6px",
+  marginBottom: "18px",
+};
+
+const menuContainerMobileStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
+};
+
+const menuMobileStyle: CSSProperties = {
+  ...menuStyle,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+const tituloMobileStyle: CSSProperties = {
+  ...tituloStyle,
+  fontSize: "30px",
+};
+
+const categoriaHeaderMobileStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+  marginBottom: "18px",
+};
+
+const linhaPrecoMobileStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "12px",
+  alignItems: "end",
+  minWidth: 0,
+};
+
+const cardMobileStyle: CSSProperties = {
+  ...cardStyle,
+  padding: "18px",
+};
+
+const botaoPrincipalMobileStyle: CSSProperties = {
+  ...botaoPrincipalStyle,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const botaoSecundarioMobileStyle: CSSProperties = {
+  ...botaoSecundarioStyle,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const botaoRemoverMobileStyle: CSSProperties = {
+  ...botaoRemoverStyle,
+  width: "100%",
+  boxSizing: "border-box",
 };

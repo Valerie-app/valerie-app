@@ -110,9 +110,21 @@ export default function AdminProcessosPage() {
   const [valorFinalEdit, setValorFinalEdit] = useState<Record<string, string>>({});
   const [custoEstimadoEdit, setCustoEstimadoEdit] = useState<Record<string, string>>({});
   const [notasAdminEdit, setNotasAdminEdit] = useState<Record<string, string>>({});
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     void validarAdmin();
+  }, []);
+
+  useEffect(() => {
+    function verificarTamanho() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    verificarTamanho();
+    window.addEventListener("resize", verificarTamanho);
+
+    return () => window.removeEventListener("resize", verificarTamanho);
   }, []);
 
   async function validarAdmin() {
@@ -877,10 +889,34 @@ export default function AdminProcessosPage() {
     });
   }, [processos, pesquisa, filtroEstado]);
 
+  const botaoPrincipalAtual = isMobile
+    ? { ...botaoPrincipalStyle, ...botaoMobileBaseStyle }
+    : botaoPrincipalStyle;
+
+  const botaoSecundarioAtual = isMobile
+    ? { ...botaoSecundarioStyle, ...botaoMobileBaseStyle }
+    : botaoSecundarioStyle;
+
+  const botaoProducaoAtual = isMobile
+    ? { ...botaoProducaoStyle, ...botaoMobileBaseStyle }
+    : botaoProducaoStyle;
+
+  const botaoAprovarAtual = isMobile
+    ? { ...botaoAprovarStyle, ...botaoMobileBaseStyle }
+    : botaoAprovarStyle;
+
+  const botaoRejeitarAtual = isMobile
+    ? { ...botaoRejeitarStyle, ...botaoMobileBaseStyle }
+    : botaoRejeitarStyle;
+
+  const botaoApagarAtual = isMobile
+    ? { ...botaoApagarStyle, ...botaoMobileBaseStyle }
+    : botaoApagarStyle;
+
   if (aVerificar) {
     return (
-      <main style={mainStyle}>
-        <section style={contentStyle}>
+      <main style={isMobile ? mainMobileStyle : mainStyle}>
+        <section style={isMobile ? contentMobileStyle : contentStyle}>
           <h1>Processos</h1>
           <p>A verificar acesso...</p>
         </section>
@@ -889,20 +925,28 @@ export default function AdminProcessosPage() {
   }
 
   return (
-    <main style={mainStyle}>
-      <aside style={asideStyle}>
-        <div style={logoStyle}>VALERIE</div>
+    <main style={isMobile ? mainMobileStyle : mainStyle}>
+      <aside style={isMobile ? asideMobileStyle : asideStyle}>
+        <div style={isMobile ? logoMobileStyle : logoStyle}>VALERIE</div>
 
-        <div style={menuContainerStyle}>
-          <a href="/admin" style={menuStyle}>Dashboard</a>
-          <a href="/admin/processos" style={{ ...menuStyle, background: "rgba(255,255,255,0.08)" }}>Processos</a>
-          <a href="/admin/clientes" style={menuStyle}>Clientes</a>
-          <a href="/admin/precos" style={menuStyle}>Preços</a>
-          <a href="/admin/financeiro" style={menuStyle}>Financeiro</a>
-          <a href="/admin/calendario" style={menuStyle}>Calendário</a>
-          <a href="/admin/operadores" style={menuStyle}>Operadores</a>
-          <a href="/admin/importar-val" style={menuStyle}>Importar VAL</a>
-          <a href="/aprovacao-clientes" style={menuStyle}>Aprovação Clientes</a>
+        <div style={isMobile ? menuContainerMobileStyle : menuContainerStyle}>
+          <a href="/admin" style={isMobile ? menuMobileStyle : menuStyle}>Dashboard</a>
+          <a
+            href="/admin/processos"
+            style={{
+              ...(isMobile ? menuMobileStyle : menuStyle),
+              background: "rgba(255,255,255,0.08)",
+            }}
+          >
+            Processos
+          </a>
+          <a href="/admin/clientes" style={isMobile ? menuMobileStyle : menuStyle}>Clientes</a>
+          <a href="/admin/precos" style={isMobile ? menuMobileStyle : menuStyle}>Preços</a>
+          <a href="/admin/financeiro" style={isMobile ? menuMobileStyle : menuStyle}>Financeiro</a>
+          <a href="/admin/calendario" style={isMobile ? menuMobileStyle : menuStyle}>Calendário</a>
+          <a href="/admin/operadores" style={isMobile ? menuMobileStyle : menuStyle}>Operadores</a>
+          <a href="/admin/importar-val" style={isMobile ? menuMobileStyle : menuStyle}>Importar VAL</a>
+          <a href="/aprovacao-clientes" style={isMobile ? menuMobileStyle : menuStyle}>Aprovação Clientes</a>
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -910,22 +954,22 @@ export default function AdminProcessosPage() {
         </div>
       </aside>
 
-      <section style={contentStyle}>
-        <div style={heroStyle}>
-          <div>
+      <section style={isMobile ? contentMobileStyle : contentStyle}>
+        <div style={isMobile ? heroMobileStyle : heroStyle}>
+          <div style={{ minWidth: 0 }}>
             <div style={eyebrowStyle}>Gestão Operacional</div>
             <h1 style={{ margin: 0, fontSize: "clamp(28px, 5vw, 38px)" }}>Processos</h1>
-            <p style={{ opacity: 0.8 }}>
+            <p style={{ opacity: 0.8, lineHeight: 1.45 }}>
               Gestão de pedidos, valores, artigos, estado e recalcular orçamentos.
             </p>
           </div>
 
-          <button onClick={carregarTudo} style={botaoPrincipalStyle}>
+          <button onClick={carregarTudo} style={botaoPrincipalAtual}>
             Atualizar
           </button>
         </div>
 
-        <div style={filtrosStyle}>
+        <div style={isMobile ? filtrosMobileStyle : filtrosStyle}>
           <input
             value={pesquisa}
             onChange={(e) => setPesquisa(e.target.value)}
@@ -938,9 +982,9 @@ export default function AdminProcessosPage() {
             onChange={(e) => setFiltroEstado(e.target.value)}
             style={inputStyle}
           >
-            <option value="Todos">Todos</option>
+            <option value="Todos" style={{ color: "black" }}>Todos</option>
             {ESTADOS.map((estado) => (
-              <option key={estado} value={estado}>{estado}</option>
+              <option key={estado} value={estado} style={{ color: "black" }}>{estado}</option>
             ))}
           </select>
         </div>
@@ -951,7 +995,7 @@ export default function AdminProcessosPage() {
           </div>
         )}
 
-        <div style={resumoGridStyle}>
+        <div style={isMobile ? resumoGridMobileStyle : resumoGridStyle}>
           <div style={resumoCardStyle}>
             <strong>{processosFiltrados.length}</strong>
             <span>Total</span>
@@ -986,7 +1030,7 @@ export default function AdminProcessosPage() {
 
                 return (
                   <div key={processo.id} style={linhaStyle}>
-                    <div style={linhaHeaderStyle}>
+                    <div style={isMobile ? linhaHeaderMobileStyle : linhaHeaderStyle}>
                       <div style={{ minWidth: 0 }}>
                         <h3 style={{ margin: 0, wordBreak: "break-word" }}>{processo.nome_obra || "Sem nome da obra"}</h3>
                         <p style={subtextoStyle}>Cliente: {processo.nome_cliente || "—"}</p>
@@ -1015,10 +1059,10 @@ export default function AdminProcessosPage() {
                         <span style={badgeStyle}>{processo.estado || "Sem estado"}</span>
                       </div>
 
-                      <div style={acoesStyle}>
+                      <div style={isMobile ? acoesMobileStyle : acoesStyle}>
                         <button
                           onClick={() => setProcessoAberto(aberto ? null : processo.id)}
-                          style={botaoSecundarioStyle}
+                          style={botaoSecundarioAtual}
                         >
                           {aberto ? "Fechar" : "Abrir"}
                         </button>
@@ -1026,7 +1070,7 @@ export default function AdminProcessosPage() {
                         {!processo.codigo_val ? (
                           <button
                             onClick={() => criarValParaProcesso(processo)}
-                            style={botaoPrincipalStyle}
+                            style={botaoPrincipalAtual}
                             disabled={processoEmAcao === processo.id}
                           >
                             Criar VAL
@@ -1035,14 +1079,14 @@ export default function AdminProcessosPage() {
                           <>
                             <button
                               onClick={() => abrirPastaDropbox(processo.caminho_dropbox)}
-                              style={botaoSecundarioStyle}
+                              style={botaoSecundarioAtual}
                             >
                               Abrir Pasta
                             </button>
 
                             <button
                               onClick={() => criarNovoLote(processo)}
-                              style={botaoSecundarioStyle}
+                              style={botaoSecundarioAtual}
                               disabled={processoEmAcao === processo.id}
                             >
                               Novo Lote
@@ -1050,7 +1094,7 @@ export default function AdminProcessosPage() {
 
                             <button
                               onClick={() => abrirProducao(processo)}
-                              style={botaoProducaoStyle}
+                              style={botaoProducaoAtual}
                               disabled={processoEmAcao === processo.id}
                             >
                               QR Produção
@@ -1058,7 +1102,7 @@ export default function AdminProcessosPage() {
 
                             <button
                               onClick={() => copiarLinkProducao(processo)}
-                              style={botaoSecundarioStyle}
+                              style={botaoSecundarioAtual}
                               disabled={processoEmAcao === processo.id}
                             >
                               Copiar Link QR
@@ -1067,14 +1111,14 @@ export default function AdminProcessosPage() {
                             {processo.estado === "Validado" && (
                               <button
                                 onClick={() => gerarQRArtigos(processo)}
-                                style={botaoPrincipalStyle}
+                                style={botaoPrincipalAtual}
                                 disabled={processoEmAcao === processo.id}
                               >
                                 Gerar QR Artigos
                               </button>
                             )}
 
-                            <label style={botaoSecundarioStyle}>
+                            <label style={botaoSecundarioAtual}>
                               Upload Ficheiro
                               <input
                                 type="file"
@@ -1092,7 +1136,7 @@ export default function AdminProcessosPage() {
                             {processo.estado_dropbox !== "encomenda" && (
                               <button
                                 onClick={() => aprovarOrcamentoDropbox(processo)}
-                                style={botaoAprovarStyle}
+                                style={botaoAprovarAtual}
                                 disabled={processoEmAcao === processo.id}
                               >
                                 Aprovar Dropbox
@@ -1103,7 +1147,7 @@ export default function AdminProcessosPage() {
 
                         <button
                           onClick={() => recalcularProcesso(processo)}
-                          style={botaoSecundarioStyle}
+                          style={botaoSecundarioAtual}
                           disabled={processoEmAcao === processo.id}
                         >
                           Recalcular
@@ -1111,7 +1155,7 @@ export default function AdminProcessosPage() {
 
                         <button
                           onClick={() => atualizarEstado(processo.id, "Em Análise")}
-                          style={botaoSecundarioStyle}
+                          style={botaoSecundarioAtual}
                           disabled={processoEmAcao === processo.id}
                         >
                           Em Análise
@@ -1119,7 +1163,7 @@ export default function AdminProcessosPage() {
 
                         <button
                           onClick={() => atualizarEstado(processo.id, "Validado")}
-                          style={botaoAprovarStyle}
+                          style={botaoAprovarAtual}
                           disabled={processoEmAcao === processo.id}
                         >
                           Validar
@@ -1127,7 +1171,7 @@ export default function AdminProcessosPage() {
 
                         <button
                           onClick={() => atualizarEstado(processo.id, "Rejeitado")}
-                          style={botaoRejeitarStyle}
+                          style={botaoRejeitarAtual}
                           disabled={processoEmAcao === processo.id}
                         >
                           Rejeitar
@@ -1136,7 +1180,7 @@ export default function AdminProcessosPage() {
                         {processo.estado === "Rejeitado" && (
                           <button
                             onClick={() => apagarProcessoRejeitado(processo)}
-                            style={botaoApagarStyle}
+                            style={botaoApagarAtual}
                             disabled={processoEmAcao === processo.id}
                           >
                             Apagar
@@ -1145,7 +1189,7 @@ export default function AdminProcessosPage() {
                       </div>
                     </div>
 
-                    <div style={metricasStyle}>
+                    <div style={isMobile ? metricasMobileStyle : metricasStyle}>
                       <div style={miniCardStyle}><span>Valor</span><strong>{formatarMoeda(valor)}</strong></div>
                       <div style={miniCardStyle}><span>Custo</span><strong>{formatarMoeda(custo)}</strong></div>
                       <div style={miniCardStyle}><span>Lucro</span><strong>{formatarMoeda(lucro)}</strong></div>
@@ -1170,15 +1214,15 @@ export default function AdminProcessosPage() {
                             <a href={urlProducao} target="_blank" style={linkInlineStyle}>
                               {urlProducao}
                             </a>
-                            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                              <button type="button" onClick={() => abrirProducao(processo)} style={botaoProducaoStyle}>
+                            <div style={isMobile ? qrActionsMobileStyle : qrActionsStyle}>
+                              <button type="button" onClick={() => abrirProducao(processo)} style={botaoProducaoAtual}>
                                 Abrir QR Produção
                               </button>
-                              <button type="button" onClick={() => copiarLinkProducao(processo)} style={botaoSecundarioStyle}>
+                              <button type="button" onClick={() => copiarLinkProducao(processo)} style={botaoSecundarioAtual}>
                                 Copiar Link
                               </button>
                               {processo.estado === "Validado" && (
-                                <button type="button" onClick={() => gerarQRArtigos(processo)} style={botaoPrincipalStyle}>
+                                <button type="button" onClick={() => gerarQRArtigos(processo)} style={botaoPrincipalAtual}>
                                   Gerar QR Artigos
                                 </button>
                               )}
@@ -1237,7 +1281,7 @@ export default function AdminProcessosPage() {
 
                         <button
                           onClick={() => guardarDadosAdmin(processo)}
-                          style={{ ...botaoPrincipalStyle, marginTop: 16 }}
+                          style={{ ...botaoPrincipalAtual, marginTop: 16 }}
                           disabled={processoEmAcao === processo.id}
                         >
                           Guardar Dados Admin
@@ -1303,45 +1347,42 @@ export default function AdminProcessosPage() {
   );
 }
 
+/* DESKTOP ORIGINAL */
+
 const mainStyle: CSSProperties = {
   minHeight: "100dvh",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
-  flexDirection: "column",
   fontFamily: "Arial, sans-serif",
-  overflowX: "hidden",
 };
 
 const asideStyle: CSSProperties = {
-  width: "100%",
-  minHeight: "auto",
-  padding: "18px 16px",
+  width: 260,
+  minHeight: "100dvh",
+  padding: "30px 20px",
   background: "rgba(0,0,0,0.14)",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  borderRight: "1px solid rgba(255,255,255,0.08)",
+  flexShrink: 0,
   boxSizing: "border-box",
 };
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: 16,
+  padding: 40,
   overflowX: "hidden",
-  width: "100%",
-  boxSizing: "border-box",
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: 28,
-  letterSpacing: 6,
-  marginBottom: 18,
+  fontSize: 36,
+  letterSpacing: 9,
+  marginBottom: 36,
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "flex",
+  display: "grid",
   gap: 12,
-  overflowX: "auto",
-  paddingBottom: 6,
 };
 
 const menuStyle: CSSProperties = {
@@ -1351,15 +1392,13 @@ const menuStyle: CSSProperties = {
   color: "white",
   textDecoration: "none",
   fontWeight: "bold",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
 };
 
 const heroStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: 18,
-  padding: 18,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 20,
+  padding: 28,
   borderRadius: 22,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -1376,13 +1415,13 @@ const eyebrowStyle: CSSProperties = {
 
 const filtrosStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1.5fr 1fr",
   gap: 12,
   marginBottom: 18,
 };
 
 const cardStyle: CSSProperties = {
-  padding: 16,
+  padding: 24,
   borderRadius: 18,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -1391,7 +1430,7 @@ const cardStyle: CSSProperties = {
 
 const resumoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
   gap: 12,
   marginBottom: 18,
 };
@@ -1407,7 +1446,7 @@ const resumoCardStyle: CSSProperties = {
 };
 
 const linhaStyle: CSSProperties = {
-  padding: 16,
+  padding: 18,
   borderRadius: 14,
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
@@ -1418,20 +1457,22 @@ const linhaStyle: CSSProperties = {
 
 const linhaHeaderStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1fr auto",
   gap: 16,
 };
 
 const acoesStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
+  display: "flex",
+  flexWrap: "wrap",
   gap: 10,
-  width: "100%",
+  justifyContent: "flex-end",
+  alignContent: "flex-start",
+  maxWidth: 520,
 };
 
 const metricasStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: 10,
 };
 
@@ -1469,6 +1510,13 @@ const qrInfoBoxStyle: CSSProperties = {
   background: "rgba(92,115,199,0.16)",
   border: "1px solid rgba(92,115,199,0.40)",
   overflow: "hidden",
+};
+
+const qrActionsStyle: CSSProperties = {
+  marginTop: 12,
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
 };
 
 const linkInlineStyle: CSSProperties = {
@@ -1534,6 +1582,7 @@ const inputStyle: CSSProperties = {
   color: "white",
   outline: "none",
   boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const textareaStyle: CSSProperties = {
@@ -1556,7 +1605,6 @@ const botaoPrincipalStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1568,7 +1616,6 @@ const botaoProducaoStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1580,7 +1627,6 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1592,7 +1638,6 @@ const botaoAprovarStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1604,7 +1649,6 @@ const botaoRejeitarStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1616,7 +1660,6 @@ const botaoApagarStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1634,4 +1677,99 @@ const mensagemErroStyle: CSSProperties = {
   borderRadius: 12,
   background: "rgba(180,50,50,0.18)",
   border: "1px solid rgba(180,50,50,0.35)",
+};
+
+/* MOBILE */
+
+const mainMobileStyle: CSSProperties = {
+  ...mainStyle,
+  flexDirection: "column",
+  overflowX: "hidden",
+};
+
+const asideMobileStyle: CSSProperties = {
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
+  background: "rgba(0,0,0,0.14)",
+  borderRight: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
+  flexShrink: 0,
+};
+
+const contentMobileStyle: CSSProperties = {
+  flex: 1,
+  padding: 16,
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const logoMobileStyle: CSSProperties = {
+  fontSize: 28,
+  letterSpacing: 6,
+  marginBottom: 18,
+};
+
+const menuContainerMobileStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: 12,
+  overflowX: "auto",
+  paddingBottom: 6,
+};
+
+const menuMobileStyle: CSSProperties = {
+  ...menuStyle,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+const heroMobileStyle: CSSProperties = {
+  ...heroStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  padding: 18,
+};
+
+const filtrosMobileStyle: CSSProperties = {
+  ...filtrosStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const resumoGridMobileStyle: CSSProperties = {
+  ...resumoGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const linhaHeaderMobileStyle: CSSProperties = {
+  ...linhaHeaderStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const acoesMobileStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 10,
+  width: "100%",
+  maxWidth: "100%",
+};
+
+const metricasMobileStyle: CSSProperties = {
+  ...metricasStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const botaoMobileBaseStyle: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const qrActionsMobileStyle: CSSProperties = {
+  marginTop: 12,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 10,
 };

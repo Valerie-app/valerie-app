@@ -112,9 +112,21 @@ export default function AdminFinanceiroPage() {
   });
 
   const [metaMensalEdit, setMetaMensalEdit] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     void validarAdmin();
+  }, []);
+
+  useEffect(() => {
+    function verificarTamanho() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    verificarTamanho();
+    window.addEventListener("resize", verificarTamanho);
+
+    return () => window.removeEventListener("resize", verificarTamanho);
   }, []);
 
   useEffect(() => {
@@ -667,8 +679,8 @@ export default function AdminFinanceiroPage() {
 
   if (aVerificar) {
     return (
-      <main style={mainStyle}>
-        <section style={contentStyle}>
+      <main style={isMobile ? mainMobileStyle : mainStyle}>
+        <section style={isMobile ? contentMobileStyle : contentStyle}>
           <h1>Financeiro</h1>
           <p>A verificar acesso...</p>
         </section>
@@ -677,33 +689,33 @@ export default function AdminFinanceiroPage() {
   }
 
   return (
-    <main style={mainStyle}>
-      <aside style={asideStyle}>
-        <div style={logoStyle}>VALERIE</div>
+    <main style={isMobile ? mainMobileStyle : mainStyle}>
+      <aside style={isMobile ? asideMobileStyle : asideStyle}>
+        <div style={isMobile ? logoMobileStyle : logoStyle}>VALERIE</div>
 
-        <div style={menuContainerStyle}>
-          <a href="/admin" style={menuStyle}>
+        <div style={isMobile ? menuContainerMobileStyle : menuContainerStyle}>
+          <a href="/admin" style={isMobile ? menuMobileStyle : menuStyle}>
             Dashboard
           </a>
-          <a href="/admin/processos" style={menuStyle}>
+          <a href="/admin/processos" style={isMobile ? menuMobileStyle : menuStyle}>
             Processos
           </a>
-          <a href="/admin/clientes" style={menuStyle}>
+          <a href="/admin/clientes" style={isMobile ? menuMobileStyle : menuStyle}>
             Clientes
           </a>
-          <a href="/admin/precos" style={menuStyle}>
+          <a href="/admin/precos" style={isMobile ? menuMobileStyle : menuStyle}>
             Preços
           </a>
           <a
             href="/admin/financeiro"
-            style={{ ...menuStyle, background: "rgba(255,255,255,0.08)" }}
+            style={{ ...(isMobile ? menuMobileStyle : menuStyle), background: "rgba(255,255,255,0.08)" }}
           >
             Financeiro
           </a>
-          <a href="/admin/calendario" style={menuStyle}>
+          <a href="/admin/calendario" style={isMobile ? menuMobileStyle : menuStyle}>
             Calendário
           </a>
-          <a href="/aprovacao-clientes" style={menuStyle}>
+          <a href="/aprovacao-clientes" style={isMobile ? menuMobileStyle : menuStyle}>
             Aprovação Clientes
           </a>
         </div>
@@ -713,27 +725,27 @@ export default function AdminFinanceiroPage() {
         </div>
       </aside>
 
-      <section style={contentStyle}>
-        <div style={heroStyle}>
+      <section style={isMobile ? contentMobileStyle : contentStyle}>
+        <div style={isMobile ? heroMobileStyle : heroStyle}>
           <div style={{ minWidth: 0 }}>
             <div style={eyebrowStyle}>Painel Financeiro</div>
-            <h1 style={titleStyle}>Financeiro</h1>
+            <h1 style={isMobile ? titleMobileStyle : titleStyle}>Financeiro</h1>
             <p style={subtitleStyle}>
               Faturação, custos, lucro, margem, metas reais, alertas e gráficos para decisões rápidas.
             </p>
           </div>
 
-          <div style={topActionsStyle}>
-            <button type="button" onClick={irHoje} style={botaoSecundarioStyle}>
+          <div style={isMobile ? topActionsMobileStyle : topActionsStyle}>
+            <button type="button" onClick={irHoje} style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}>
               Hoje
             </button>
-            <button type="button" onClick={irMesAnterior} style={botaoSecundarioStyle}>
+            <button type="button" onClick={irMesAnterior} style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}>
               ←
             </button>
-            <button type="button" onClick={irMesSeguinte} style={botaoSecundarioStyle}>
+            <button type="button" onClick={irMesSeguinte} style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}>
               →
             </button>
-            <button type="button" onClick={carregarDados} style={botaoPrincipalStyle}>
+            <button type="button" onClick={carregarDados} style={isMobile ? botaoPrincipalMobileStyle : botaoPrincipalStyle}>
               Atualizar
             </button>
           </div>
@@ -750,7 +762,7 @@ export default function AdminFinanceiroPage() {
         <div style={cardStyle}>
           <h2 style={{ marginTop: 0 }}>Meta e capacidade</h2>
 
-          <div style={metaGridStyle}>
+          <div style={isMobile ? metaGridMobileStyle : metaGridStyle}>
             <div style={{ minWidth: 0 }}>
               <label style={labelStyle}>Meta mensal desejada</label>
               <input
@@ -774,7 +786,7 @@ export default function AdminFinanceiroPage() {
             <button
               type="button"
               onClick={guardarMetaMensal}
-              style={botaoPrincipalStyle}
+              style={isMobile ? botaoPrincipalMobileStyle : botaoPrincipalStyle}
               disabled={aGuardarMeta}
             >
               {aGuardarMeta ? "A guardar..." : "Guardar Meta"}
@@ -793,7 +805,7 @@ export default function AdminFinanceiroPage() {
           </div>
         ) : (
           <>
-            <div style={resumoGridStyle}>
+            <div style={isMobile ? resumoGridMobileStyle : resumoGridStyle}>
               <Kpi titulo="Faturação prevista" valor={formatarMoeda(resumo.faturacaoPrevistaMes)} />
               <Kpi titulo="Meta real do mês" valor={formatarMoeda(resumo.objetivoMensalReal)} />
               <Kpi titulo="Meta atingida" valor={`${resumo.percentagemMeta.toFixed(1)}%`} />
@@ -828,7 +840,7 @@ export default function AdminFinanceiroPage() {
               </div>
             </div>
 
-            <div style={alertasGridStyle}>
+            <div style={isMobile ? alertasGridMobileStyle : alertasGridStyle}>
               {alertas.map((alerta, index) => (
                 <div
                   key={`${alerta.titulo}-${index}`}
@@ -854,7 +866,7 @@ export default function AdminFinanceiroPage() {
               ))}
             </div>
 
-            <div style={graficosGridStyle}>
+            <div style={isMobile ? graficosGridMobileStyle : graficosGridStyle}>
               <div style={cardStyle}>
                 <h2 style={{ marginTop: 0 }}>Faturação e lucro por mês</h2>
 
@@ -944,7 +956,7 @@ export default function AdminFinanceiroPage() {
               <div style={cardStyle}>
                 <h2 style={{ marginTop: 0 }}>Saúde financeira</h2>
 
-                <div style={healthGridStyle}>
+                <div style={isMobile ? healthGridMobileStyle : healthGridStyle}>
                   <HealthItem titulo="Margem" valor={`${resumo.margemMedia.toFixed(1)}%`} cor={obterCorMargem(resumo.margemMedia)} />
                   <HealthItem titulo="Meta" valor={`${resumo.percentagemMeta.toFixed(1)}%`} cor={resumo.percentagemMeta >= 100 ? "#9df5b4" : resumo.percentagemMeta >= 75 ? "#ffd76c" : "#ff9d9d"} />
                   <HealthItem titulo="Custo" valor={`${resumo.custoPercentagem.toFixed(1)}%`} cor={resumo.custoPercentagem <= 65 ? "#9df5b4" : resumo.custoPercentagem <= 80 ? "#ffd76c" : "#ff9d9d"} />
@@ -953,7 +965,7 @@ export default function AdminFinanceiroPage() {
               </div>
             </div>
 
-            <div style={filtrosStyle}>
+            <div style={isMobile ? filtrosMobileStyle : filtrosStyle}>
               <input
                 value={pesquisa}
                 onChange={(e) => setPesquisa(e.target.value)}
@@ -986,7 +998,7 @@ export default function AdminFinanceiroPage() {
                 <option value="risco_desc" style={{ color: "black" }}>Maior risco</option>
               </select>
 
-              <button type="button" onClick={limparFiltros} style={botaoSecundarioStyle}>
+              <button type="button" onClick={limparFiltros} style={isMobile ? botaoSecundarioMobileStyle : botaoSecundarioStyle}>
                 Limpar
               </button>
             </div>
@@ -1009,7 +1021,7 @@ export default function AdminFinanceiroPage() {
 
                     return (
                       <div key={processo.id} style={linhaStyle}>
-                        <div style={linhaHeaderStyle}>
+                        <div style={isMobile ? linhaHeaderMobileStyle : linhaHeaderStyle}>
                           <div style={{ minWidth: 0 }}>
                             <h3 style={{ margin: 0, wordBreak: "break-word" }}>
                               {processo.nome_obra || "Sem nome da obra"}
@@ -1029,7 +1041,7 @@ export default function AdminFinanceiroPage() {
                           <div style={badgeStyle}>{processo.estado || "Sem estado"}</div>
                         </div>
 
-                        <div style={metricsGridStyle}>
+                        <div style={isMobile ? metricsGridMobileStyle : metricsGridStyle}>
                           <div style={miniCardStyle}>
                             <span>Valor</span>
                             <strong>{formatarMoeda(valor)}</strong>
@@ -1113,39 +1125,37 @@ function HealthItem({
   );
 }
 
+
+/* DESKTOP ORIGINAL */
+
 const mainStyle: CSSProperties = {
   minHeight: "100dvh",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
-  flexDirection: "column",
-  overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: "100%",
-  minHeight: "auto",
-  padding: "18px 16px",
+  width: 260,
+  minHeight: "100dvh",
+  padding: "30px 20px",
   background: "rgba(0,0,0,0.14)",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-  boxSizing: "border-box",
+  borderRight: "1px solid rgba(255,255,255,0.08)",
   flexShrink: 0,
+  boxSizing: "border-box",
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: 28,
-  letterSpacing: 6,
-  marginBottom: 18,
+  fontSize: 36,
+  letterSpacing: 9,
+  marginBottom: 36,
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "row",
+  display: "grid",
   gap: 12,
-  overflowX: "auto",
-  paddingBottom: 6,
 };
 
 const menuStyle: CSSProperties = {
@@ -1155,30 +1165,23 @@ const menuStyle: CSSProperties = {
   color: "white",
   textDecoration: "none",
   fontWeight: "bold",
-  whiteSpace: "nowrap",
-  flexShrink: 0,
 };
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: 16,
+  padding: 40,
   overflowX: "hidden",
-  width: "100%",
-  maxWidth: "100%",
-  boxSizing: "border-box",
 };
 
 const heroStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: 16,
-  padding: 18,
-  borderRadius: 18,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 20,
+  padding: 28,
+  borderRadius: 22,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: 16,
-  overflow: "hidden",
-  boxSizing: "border-box",
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -1191,53 +1194,49 @@ const eyebrowStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 32,
-  wordBreak: "break-word",
+  fontSize: 42,
 };
 
 const subtitleStyle: CSSProperties = {
   opacity: 0.82,
   marginTop: 10,
   lineHeight: 1.45,
-  maxWidth: "100%",
-  wordBreak: "break-word",
+  maxWidth: 820,
 };
 
 const topActionsStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  display: "flex",
   gap: 8,
-  width: "100%",
+  flexWrap: "wrap",
+  alignItems: "flex-start",
 };
 
 const mesAtualStyle: CSSProperties = {
-  fontSize: 22,
+  fontSize: 24,
   fontWeight: "bold",
   textTransform: "capitalize",
   marginBottom: 16,
-  wordBreak: "break-word",
 };
 
 const cardStyle: CSSProperties = {
-  padding: 18,
-  borderRadius: 16,
+  padding: 24,
+  borderRadius: 18,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: 18,
   overflow: "hidden",
-  boxSizing: "border-box",
 };
 
 const metaGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1.4fr 1fr 1fr auto",
   gap: 12,
   alignItems: "end",
 };
 
 const resumoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: 12,
   marginBottom: 18,
 };
@@ -1260,7 +1259,6 @@ const progressCardStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: 18,
   overflow: "hidden",
-  boxSizing: "border-box",
 };
 
 const progressHeaderStyle: CSSProperties = {
@@ -1285,7 +1283,7 @@ const progressInnerStyle: CSSProperties = {
 
 const alertasGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: 12,
   marginBottom: 18,
 };
@@ -1302,14 +1300,14 @@ const alertaCardStyle: CSSProperties = {
 
 const graficosGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1.4fr 1fr",
   gap: 18,
   marginBottom: 18,
 };
 
 const filtrosStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "1.5fr 1fr 1fr auto",
   gap: 12,
   marginBottom: 18,
 };
@@ -1326,14 +1324,14 @@ const linhaStyle: CSSProperties = {
 };
 
 const linhaHeaderStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: 12,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
 };
 
 const metricsGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
   gap: 10,
 };
 
@@ -1403,7 +1401,6 @@ const botaoPrincipalStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1415,7 +1412,6 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 14px",
   fontWeight: "bold",
   cursor: "pointer",
-  width: "100%",
   boxSizing: "border-box",
 };
 
@@ -1438,13 +1434,11 @@ const mensagemErroStyle: CSSProperties = {
 };
 
 const barChartStyle: CSSProperties = {
-  height: 240,
+  height: 260,
   display: "grid",
-  gridTemplateColumns: "repeat(12, minmax(32px, 1fr))",
-  gap: 8,
+  gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
+  gap: 10,
   alignItems: "end",
-  overflowX: "auto",
-  paddingBottom: 6,
 };
 
 const barColumnStyle: CSSProperties = {
@@ -1452,7 +1446,7 @@ const barColumnStyle: CSSProperties = {
   display: "grid",
   gridTemplateRows: "1fr auto",
   gap: 8,
-  minWidth: 32,
+  minWidth: 0,
 };
 
 const barAreaStyle: CSSProperties = {
@@ -1504,9 +1498,9 @@ const dotStyle: CSSProperties = {
 };
 
 const smallBarHeaderStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: 4,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
   marginBottom: 6,
   fontSize: 14,
   wordBreak: "break-word",
@@ -1527,7 +1521,7 @@ const smallBarInnerStyle: CSSProperties = {
 
 const healthGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: 14,
 };
 
@@ -1550,4 +1544,125 @@ const healthCircleStyle: CSSProperties = {
   placeItems: "center",
   fontWeight: "bold",
   fontSize: 16,
+};
+
+/* MOBILE */
+
+const mainMobileStyle: CSSProperties = {
+  ...mainStyle,
+  flexDirection: "column",
+  overflowX: "hidden",
+};
+
+const asideMobileStyle: CSSProperties = {
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
+  background: "rgba(0,0,0,0.14)",
+  borderRight: "none",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
+  flexShrink: 0,
+};
+
+const logoMobileStyle: CSSProperties = {
+  fontSize: 28,
+  letterSpacing: 6,
+  marginBottom: 18,
+};
+
+const menuContainerMobileStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: 12,
+  overflowX: "auto",
+  paddingBottom: 6,
+};
+
+const menuMobileStyle: CSSProperties = {
+  ...menuStyle,
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+};
+
+const contentMobileStyle: CSSProperties = {
+  flex: 1,
+  padding: 16,
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const heroMobileStyle: CSSProperties = {
+  ...heroStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  padding: 18,
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
+const titleMobileStyle: CSSProperties = {
+  ...titleStyle,
+  fontSize: 32,
+  wordBreak: "break-word",
+};
+
+const topActionsMobileStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 8,
+  width: "100%",
+};
+
+const metaGridMobileStyle: CSSProperties = {
+  ...metaGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const resumoGridMobileStyle: CSSProperties = {
+  ...resumoGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const alertasGridMobileStyle: CSSProperties = {
+  ...alertasGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const graficosGridMobileStyle: CSSProperties = {
+  ...graficosGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const filtrosMobileStyle: CSSProperties = {
+  ...filtrosStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const linhaHeaderMobileStyle: CSSProperties = {
+  ...linhaHeaderStyle,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+};
+
+const metricsGridMobileStyle: CSSProperties = {
+  ...metricsGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const healthGridMobileStyle: CSSProperties = {
+  ...healthGridStyle,
+  gridTemplateColumns: "1fr",
+};
+
+const botaoPrincipalMobileStyle: CSSProperties = {
+  ...botaoPrincipalStyle,
+  width: "100%",
+};
+
+const botaoSecundarioMobileStyle: CSSProperties = {
+  ...botaoSecundarioStyle,
+  width: "100%",
 };
