@@ -1,11 +1,12 @@
 "use client";
 
 /*
-  PAGE.TSX LIMPO — Calendário Admin
+  PAGE.TSX COMPLETO — Calendário Admin
   Inclui:
-  - Produção
-  - Acabamentos
-  - Montagens
+  - Produção por meta diária
+  - VAL criado na app com data mais próxima automática
+  - VAL importado/manual com datas editáveis
+  - Produção, acabamentos e montagens
   - Datas manuais
   - Arquivar/restaurar obras
   - Cartões minimizáveis
@@ -26,7 +27,9 @@ type ProcessoCalendario = {
   dias_acabamento_previstos: number | null;
   dias_montagem_previstos: number | null;
   dias_totais_previstos: number | null;
+  data_inicio_prevista: string | null;
   data_entrega_prevista: string | null;
+  valor_diario_referencia: number | null;
   valor_estimado: number | null;
   valor_estimado_com_desconto: number | null;
   valor_final: number | null;
@@ -126,7 +129,7 @@ const DESBLOQUEIO_FIM_SEMANA = "__FIM_SEMANA_DESBLOQUEADO__";
 const ESTADOS_DISPONIVEIS = ["Todos", "Validado"] as const;
 
 const COLUNAS_PROCESSOS =
-  "id, nome_cliente, nome_obra, estado, dias_fabrico_previstos, dias_acabamento_previstos, dias_montagem_previstos, dias_totais_previstos, data_entrega_prevista, valor_estimado, valor_estimado_com_desconto, valor_final, created_at, responsavel_obra_nome, responsavel_obra_email, responsavel_acabamentos_nome, responsavel_acabamentos_email, responsavel_montagem_nome, responsavel_montagem_email, admin_alerta_email, data_inicio_producao_manual, data_fim_producao_manual, data_inicio_acabamento_manual, data_fim_acabamento_manual, data_inicio_montagem_manual, data_fim_montagem_manual, calendario_arquivado";
+  "id, nome_cliente, nome_obra, estado, dias_fabrico_previstos, dias_acabamento_previstos, dias_montagem_previstos, dias_totais_previstos, data_inicio_prevista, data_entrega_prevista, valor_diario_referencia, valor_estimado, valor_estimado_com_desconto, valor_final, created_at, responsavel_obra_nome, responsavel_obra_email, responsavel_acabamentos_nome, responsavel_acabamentos_email, responsavel_montagem_nome, responsavel_montagem_email, admin_alerta_email, data_inicio_producao_manual, data_fim_producao_manual, data_inicio_acabamento_manual, data_fim_acabamento_manual, data_inicio_montagem_manual, data_fim_montagem_manual, calendario_arquivado";
 
 export default function AdminCalendarioPage() {
   const router = useRouter();
@@ -330,7 +333,7 @@ export default function AdminCalendarioPage() {
     return `${ano}-${mes}-${dia}`;
   }
 
-  function formatarData(valor: string | null) {
+  function formatarData(valor: string | null | undefined) {
     if (!valor) return "—";
     return parseDateOnly(valor).toLocaleDateString("pt-PT");
   }
@@ -489,16 +492,19 @@ export default function AdminCalendarioPage() {
   }
 
   function obterDiasProducaoNecessarios(processo: ProcessoCalendario) {
+    const diasGuardados = Number(processo.dias_totais_previstos || 0);
+
+    if (diasGuardados > 0) {
+      return Math.max(Math.ceil(diasGuardados), 1);
+    }
+
     const valor = obterValorFinanceiroProcesso(processo);
 
     if (resumo.objetivoDiario > 0 && valor > 0) {
       return Math.max(Math.ceil(valor / resumo.objetivoDiario), 1);
     }
 
-    return Math.max(
-      Number(processo.dias_fabrico_previstos || processo.dias_totais_previstos || 0),
-      1
-    );
+    return Math.max(Number(processo.dias_fabrico_previstos || 0), 1);
   }
 
   function obterDiasAcabamentoNecessarios(processo: ProcessoCalendario) {
@@ -506,6 +512,12 @@ export default function AdminCalendarioPage() {
   }
 
   function obterValorDiarioProcesso(processo: ProcessoCalendario) {
+    const valorDiarioGuardado = Number(processo.valor_diario_referencia || 0);
+
+    if (valorDiarioGuardado > 0) {
+      return valorDiarioGuardado;
+    }
+
     const valor = obterValorFinanceiroProcesso(processo);
     const dias = obterDiasProducaoNecessarios(processo);
 
@@ -677,11 +689,14 @@ export default function AdminCalendarioPage() {
       if (temProducaoManual) {
         datasProducao = datasProducaoManuais;
       } else {
-        const valor = obterValorFinanceiroProcesso(processo);
+        const valorDiario = obterValorDiarioProcesso(processo);
         const diasProducao = obterDiasProducaoNecessarios(processo);
-        const valorDiario = diasProducao > 0 ? valor / diasProducao : 0;
 
-        let cursor = proximoDiaUtil(hoje);
+        const dataInicioPreferida = processo.data_inicio_prevista
+          ? parseDateOnly(processo.data_inicio_prevista)
+          : hoje;
+
+        let cursor = proximoDiaUtil(dataInicioPreferida);
         let seguranca = 0;
 
         while (datasProducao.length < diasProducao && seguranca < 1460) {
@@ -722,10 +737,8 @@ export default function AdminCalendarioPage() {
       }
 
       const fimAcabamento = datasAcabamento[datasAcabamento.length - 1] || null;
-
       const datasMontagem = temMontagemManual ? datasMontagemManuais : [];
       const fimMontagem = datasMontagem[datasMontagem.length - 1] || null;
-
       const dataEntregaCalculada = fimMontagem || fimAcabamento || fimProducao;
 
       resultado.push({
@@ -1589,7 +1602,7 @@ export default function AdminCalendarioPage() {
             style={estilos.selectFiltroStyle}
           >
             {ESTADOS_DISPONIVEIS.map((estado) => (
-              <option key={estado} value={estado}>{estado}</option>
+              <option key={estado} value={estado} style={{ color: "black" }}>{estado}</option>
             ))}
           </select>
 
@@ -1598,9 +1611,9 @@ export default function AdminCalendarioPage() {
             onChange={(e) => setFiltroArquivo(e.target.value as FiltroArquivo)}
             style={estilos.selectFiltroStyle}
           >
-            <option value="ativas">Ativas</option>
-            <option value="arquivadas">Arquivadas</option>
-            <option value="todas">Todas</option>
+            <option value="ativas" style={{ color: "black" }}>Ativas</option>
+            <option value="arquivadas" style={{ color: "black" }}>Arquivadas</option>
+            <option value="todas" style={{ color: "black" }}>Todas</option>
           </select>
 
           <button type="button" onClick={limparFiltros} style={estilos.botaoLimparStyle}>
@@ -1640,7 +1653,7 @@ export default function AdminCalendarioPage() {
           </div>
 
           <div style={estilos.metaAjudaStyle}>
-            As montagens são reservadas manualmente por obra. As obras arquivadas ficam guardadas, mas saem da vista ativa.
+            A produção é reservada por valor diário. Exemplo: se a meta diária for 5000 € e a obra valer 7500 €, são reservados 2 dias úteis. Se existir data de início prevista, começa nessa data; caso contrário, começa na próxima data útil disponível.
           </div>
         </div>
 
@@ -2519,6 +2532,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       background: "rgba(0,0,0,0.12)",
       padding: eDesktop ? "30px 20px" : "18px 16px",
       flexShrink: 0,
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     contentStyle: {
@@ -2527,6 +2541,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       width: "100%",
       maxWidth: "100%",
       overflowX: "hidden",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     heroCardStyle: {
@@ -2541,6 +2556,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       alignItems: eDesktop ? "center" : "flex-start",
       flexDirection: eDesktop ? "row" : "column",
       gap: "16px",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     heroEyebrowStyle: {
@@ -2581,6 +2597,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       whiteSpace: "nowrap",
       fontSize: eDesktop ? "16px" : "14px",
       flexShrink: 0,
+      fontWeight: "bold",
     } satisfies CSSProperties,
 
     tabsStyle: {
@@ -2637,6 +2654,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       background: "rgba(255,255,255,0.06)",
       color: "white",
       outline: "none",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     selectFiltroStyle: {
@@ -2647,6 +2665,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       background: "rgba(255,255,255,0.06)",
       color: "white",
       outline: "none",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     botaoLimparStyle: {
@@ -2704,6 +2723,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       marginBottom: "16px",
       minWidth: 0,
       boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     metaEditorWrapStyle: {
@@ -2753,6 +2773,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       marginBottom: "16px",
       overflow: "hidden",
       boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     mensagemStyle: {
@@ -2762,6 +2783,8 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       borderRadius: "12px",
       background: "rgba(180,50,50,0.18)",
       border: "1px solid rgba(180,50,50,0.35)",
+      boxSizing: "border-box",
+      wordBreak: "break-word",
     } satisfies CSSProperties,
 
     diasSemanaHeaderStyle: {
@@ -2797,6 +2820,8 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       minWidth: 0,
       cursor: "pointer",
       transition: "all 0.2s ease",
+      color: "white",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     topoDiaStyle: {
@@ -2847,6 +2872,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       overflow: "hidden",
       textOverflow: "ellipsis",
       minWidth: 0,
+      color: "white",
     } satisfies CSSProperties,
 
     rodapeFinanceiroDiaStyle: {
@@ -2875,6 +2901,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       fontSize: "13px",
       marginTop: "4px",
       lineHeight: 1.35,
+      wordBreak: "break-word",
     } satisfies CSSProperties,
 
     smallLabelStyle: {
@@ -2990,6 +3017,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       fontWeight: "bold",
       fontSize: "12px",
       height: "fit-content",
+      marginTop: "8px",
     } satisfies CSSProperties,
 
     arquivadoBadgeStyle: {
@@ -3002,6 +3030,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       fontWeight: "bold",
       fontSize: "12px",
       height: "fit-content",
+      marginTop: "8px",
     } satisfies CSSProperties,
 
     timelineBarraWrapStyle: {
@@ -3086,6 +3115,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       border: "1px solid rgba(255,255,255,0.10)",
       padding: eDesktop ? "24px" : "18px",
       boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     modalResumoGridStyle: {
@@ -3162,6 +3192,7 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       color: "white",
       resize: "vertical",
       fontSize: "14px",
+      boxSizing: "border-box",
     } satisfies CSSProperties,
 
     modalAcoesStyle: {
