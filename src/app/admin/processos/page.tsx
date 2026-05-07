@@ -901,6 +901,7 @@ export default function AdminProcessosPage() {
           <a href="/admin/financeiro" style={menuStyle}>Financeiro</a>
           <a href="/admin/calendario" style={menuStyle}>Calendário</a>
           <a href="/admin/operadores" style={menuStyle}>Operadores</a>
+          <a href="/admin/importar-val" style={menuStyle}>Importar VAL</a>
           <a href="/aprovacao-clientes" style={menuStyle}>Aprovação Clientes</a>
         </div>
 
@@ -913,7 +914,7 @@ export default function AdminProcessosPage() {
         <div style={heroStyle}>
           <div>
             <div style={eyebrowStyle}>Gestão Operacional</div>
-            <h1 style={{ margin: 0, fontSize: 38 }}>Processos</h1>
+            <h1 style={{ margin: 0, fontSize: "clamp(28px, 5vw, 38px)" }}>Processos</h1>
             <p style={{ opacity: 0.8 }}>
               Gestão de pedidos, valores, artigos, estado e recalcular orçamentos.
             </p>
@@ -986,8 +987,8 @@ export default function AdminProcessosPage() {
                 return (
                   <div key={processo.id} style={linhaStyle}>
                     <div style={linhaHeaderStyle}>
-                      <div>
-                        <h3 style={{ margin: 0 }}>{processo.nome_obra || "Sem nome da obra"}</h3>
+                      <div style={{ minWidth: 0 }}>
+                        <h3 style={{ margin: 0, wordBreak: "break-word" }}>{processo.nome_obra || "Sem nome da obra"}</h3>
                         <p style={subtextoStyle}>Cliente: {processo.nome_cliente || "—"}</p>
                         <p style={subtextoStyle}>Localização: {processo.localizacao || "—"}</p>
                         <p style={subtextoStyle}>Criado em: {formatarData(processo.created_at)}</p>
@@ -1308,33 +1309,39 @@ const mainStyle: CSSProperties = {
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
+  flexDirection: "column",
   fontFamily: "Arial, sans-serif",
+  overflowX: "hidden",
 };
 
 const asideStyle: CSSProperties = {
-  width: 260,
-  minHeight: "100dvh",
-  padding: "30px 20px",
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
   background: "rgba(0,0,0,0.14)",
-  borderRight: "1px solid rgba(255,255,255,0.08)",
-  flexShrink: 0,
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
 };
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: 40,
+  padding: 16,
   overflowX: "hidden",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: 36,
-  letterSpacing: 9,
-  marginBottom: 36,
+  fontSize: 28,
+  letterSpacing: 6,
+  marginBottom: 18,
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "grid",
+  display: "flex",
   gap: 12,
+  overflowX: "auto",
+  paddingBottom: 6,
 };
 
 const menuStyle: CSSProperties = {
@@ -1344,13 +1351,15 @@ const menuStyle: CSSProperties = {
   color: "white",
   textDecoration: "none",
   fontWeight: "bold",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
 };
 
 const heroStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 20,
-  padding: 28,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 18,
+  padding: 18,
   borderRadius: 22,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -1367,21 +1376,22 @@ const eyebrowStyle: CSSProperties = {
 
 const filtrosStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1.5fr 1fr",
+  gridTemplateColumns: "1fr",
   gap: 12,
   marginBottom: 18,
 };
 
 const cardStyle: CSSProperties = {
-  padding: 24,
+  padding: 16,
   borderRadius: 18,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
 };
 
 const resumoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: 12,
   marginBottom: 18,
 };
@@ -1393,33 +1403,35 @@ const resumoCardStyle: CSSProperties = {
   borderRadius: 14,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
 };
 
 const linhaStyle: CSSProperties = {
-  padding: 18,
+  padding: 16,
   borderRadius: 14,
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
   display: "grid",
   gap: 14,
+  overflow: "hidden",
 };
 
 const linhaHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: 16,
-  alignItems: "flex-start",
 };
 
 const acoesStyle: CSSProperties = {
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: 10,
-  flexWrap: "wrap",
+  width: "100%",
 };
 
 const metricasStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: 10,
 };
 
@@ -1430,13 +1442,15 @@ const miniCardStyle: CSSProperties = {
   borderRadius: 12,
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
+  overflow: "hidden",
 };
 
 const detalheStyle: CSSProperties = {
-  padding: 18,
+  padding: 16,
   borderRadius: 12,
   background: "rgba(255,255,255,0.03)",
   border: "1px solid rgba(255,255,255,0.06)",
+  overflow: "hidden",
 };
 
 const artigoStyle: CSSProperties = {
@@ -1444,6 +1458,7 @@ const artigoStyle: CSSProperties = {
   borderRadius: 12,
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
+  overflow: "hidden",
 };
 
 const qrInfoBoxStyle: CSSProperties = {
@@ -1453,6 +1468,7 @@ const qrInfoBoxStyle: CSSProperties = {
   borderRadius: 12,
   background: "rgba(92,115,199,0.16)",
   border: "1px solid rgba(92,115,199,0.40)",
+  overflow: "hidden",
 };
 
 const linkInlineStyle: CSSProperties = {
@@ -1475,6 +1491,7 @@ const linhaCalculoStyle: CSSProperties = {
   padding: "9px 12px",
   borderRadius: 8,
   background: "rgba(255,255,255,0.04)",
+  flexWrap: "wrap",
 };
 
 const linhaCalculoDestaqueStyle: CSSProperties = {
@@ -1485,12 +1502,15 @@ const linhaCalculoDestaqueStyle: CSSProperties = {
   borderRadius: 8,
   background: "rgba(92,115,199,0.22)",
   border: "1px solid rgba(92,115,199,0.45)",
+  flexWrap: "wrap",
 };
 
 const subtextoStyle: CSSProperties = {
   opacity: 0.82,
   fontSize: 14,
   marginTop: 4,
+  wordBreak: "break-word",
+  lineHeight: 1.35,
 };
 
 const badgeStyle: CSSProperties = {
@@ -1502,6 +1522,7 @@ const badgeStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.16)",
   fontWeight: "bold",
   fontSize: 12,
+  width: "fit-content",
 };
 
 const inputStyle: CSSProperties = {
@@ -1512,6 +1533,7 @@ const inputStyle: CSSProperties = {
   background: "rgba(255,255,255,0.06)",
   color: "white",
   outline: "none",
+  boxSizing: "border-box",
 };
 
 const textareaStyle: CSSProperties = {
@@ -1534,6 +1556,8 @@ const botaoPrincipalStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoProducaoStyle: CSSProperties = {
@@ -1541,9 +1565,11 @@ const botaoProducaoStyle: CSSProperties = {
   color: "white",
   border: "1px solid rgba(157,195,255,0.45)",
   borderRadius: 10,
-  padding: "10px 14px",
+  padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoSecundarioStyle: CSSProperties = {
@@ -1551,9 +1577,11 @@ const botaoSecundarioStyle: CSSProperties = {
   color: "white",
   border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: 10,
-  padding: "10px 14px",
+  padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoAprovarStyle: CSSProperties = {
@@ -1561,9 +1589,11 @@ const botaoAprovarStyle: CSSProperties = {
   color: "white",
   border: "1px solid rgba(63, 163, 107, 0.35)",
   borderRadius: 10,
-  padding: "10px 14px",
+  padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoRejeitarStyle: CSSProperties = {
@@ -1571,9 +1601,11 @@ const botaoRejeitarStyle: CSSProperties = {
   color: "white",
   border: "1px solid rgba(180,50,50,0.35)",
   borderRadius: 10,
-  padding: "10px 14px",
+  padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoApagarStyle: CSSProperties = {
@@ -1581,9 +1613,11 @@ const botaoApagarStyle: CSSProperties = {
   color: "white",
   border: "1px solid rgba(255,80,80,0.45)",
   borderRadius: 10,
-  padding: "10px 14px",
+  padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const mensagemSucessoStyle: CSSProperties = {
