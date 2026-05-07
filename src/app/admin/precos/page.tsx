@@ -351,7 +351,7 @@ export default function AdminPrecosPage() {
   if (aVerificar) {
     return (
       <main style={mainStyle}>
-        <section style={{ flex: 1, padding: "40px" }}>
+        <section style={contentStyle}>
           <h1 style={{ marginTop: 0 }}>Tabela de Preços</h1>
           <p style={{ opacity: 0.8 }}>A verificar acesso...</p>
         </section>
@@ -384,6 +384,18 @@ export default function AdminPrecosPage() {
             Preços
           </a>
 
+          <a href="/admin/financeiro" style={menuStyle}>
+            Financeiro
+          </a>
+
+          <a href="/admin/calendario" style={menuStyle}>
+            Calendário
+          </a>
+
+          <a href="/admin/importar-val" style={menuStyle}>
+            Importar VAL
+          </a>
+
           <a href="/aprovacao-clientes" style={menuStyle}>
             Aprovação Clientes
           </a>
@@ -394,10 +406,10 @@ export default function AdminPrecosPage() {
         </div>
       </aside>
 
-      <section style={{ flex: 1, padding: "40px" }}>
-        <div style={{ marginBottom: "30px" }}>
-          <h1 style={{ fontSize: "38px", margin: 0 }}>Tabela de Preços</h1>
-          <p style={{ opacity: 0.8, marginTop: "10px" }}>
+      <section style={contentStyle}>
+        <div style={headerStyle}>
+          <h1 style={tituloStyle}>Tabela de Preços</h1>
+          <p style={descricaoStyle}>
             Aqui define os preços internos da empresa. O cliente não vê qualquer
             valor na área dele.
           </p>
@@ -425,27 +437,21 @@ export default function AdminPrecosPage() {
             </button>
           </div>
         ) : (
-          <div style={{ maxWidth: "1150px", display: "grid", gap: "20px" }}>
+          <div style={listaCategoriasStyle}>
             {categoriasAgrupadas.map((categoria) => (
               <div key={categoria.nome} style={cardStyle}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "20px",
-                    marginBottom: "18px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div>
-                    <h2 style={{ margin: 0 }}>{categoria.nome}</h2>
+                <div style={categoriaHeaderStyle}>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={{ margin: 0, wordBreak: "break-word" }}>
+                      {categoria.nome}
+                    </h2>
                     {categoria.nome === "Preços Base dos Artigos" && (
                       <p
                         style={{
                           opacity: 0.75,
                           marginTop: "8px",
                           marginBottom: 0,
+                          lineHeight: 1.45,
                         }}
                       >
                         Defina aqui o valor base por m², m corrido ou outra medida
@@ -464,15 +470,7 @@ export default function AdminPrecosPage() {
 
                 <div style={{ display: "grid", gap: "12px" }}>
                   {categoria.itens.map((item) => (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1.7fr 1fr 1fr auto",
-                        gap: "12px",
-                        alignItems: "end",
-                      }}
-                    >
+                    <div key={item.id} style={linhaPrecoStyle}>
                       <div>
                         <label style={labelStyle}>Nome do Artigo</label>
                         <input
@@ -529,13 +527,7 @@ export default function AdminPrecosPage() {
               </div>
             ))}
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: "4px",
-              }}
-            >
+            <div style={guardarWrapStyle}>
               <button
                 onClick={guardarAlteracoes}
                 style={botaoPrincipalStyle}
@@ -552,32 +544,47 @@ export default function AdminPrecosPage() {
 }
 
 const mainStyle: CSSProperties = {
-  minHeight: "100vh",
+  minHeight: "100dvh",
   background:
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
+  flexDirection: "column",
+  overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: "260px",
-  minHeight: "100vh",
-  borderRight: "1px solid rgba(255,255,255,0.08)",
+  width: "100%",
+  minHeight: "auto",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(0,0,0,0.12)",
-  padding: "30px 20px",
+  padding: "18px 16px",
+  boxSizing: "border-box",
+  flexShrink: 0,
+};
+
+const contentStyle: CSSProperties = {
+  flex: 1,
+  padding: "16px",
+  overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: "38px",
-  letterSpacing: "10px",
-  marginBottom: "40px",
+  fontSize: "28px",
+  letterSpacing: "6px",
+  marginBottom: "18px",
 };
 
 const menuContainerStyle: CSSProperties = {
   display: "flex",
-  flexDirection: "column",
+  flexDirection: "row",
   gap: "12px",
+  overflowX: "auto",
+  paddingBottom: "6px",
 };
 
 const menuStyle: CSSProperties = {
@@ -586,13 +593,55 @@ const menuStyle: CSSProperties = {
   background: "rgba(255,255,255,0.04)",
   color: "white",
   textDecoration: "none",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
+  fontWeight: "bold",
+};
+
+const headerStyle: CSSProperties = {
+  marginBottom: "24px",
+};
+
+const tituloStyle: CSSProperties = {
+  fontSize: "30px",
+  margin: 0,
+  wordBreak: "break-word",
+};
+
+const descricaoStyle: CSSProperties = {
+  opacity: 0.8,
+  marginTop: "10px",
+  lineHeight: 1.5,
+};
+
+const listaCategoriasStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: "1150px",
+  display: "grid",
+  gap: "20px",
+};
+
+const categoriaHeaderStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+  marginBottom: "18px",
+};
+
+const linhaPrecoStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "12px",
+  alignItems: "end",
+  minWidth: 0,
 };
 
 const cardStyle: CSSProperties = {
-  padding: "24px",
+  padding: "18px",
   borderRadius: "16px",
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  overflow: "hidden",
 };
 
 const labelStyle: CSSProperties = {
@@ -608,6 +657,8 @@ const inputStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.1)",
   background: "rgba(255,255,255,0.06)",
   color: "white",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const selectStyle: CSSProperties = {
@@ -617,6 +668,8 @@ const selectStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.1)",
   background: "rgba(255,255,255,0.06)",
   color: "white",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const mensagemStyle: CSSProperties = {
@@ -626,6 +679,13 @@ const mensagemStyle: CSSProperties = {
   borderRadius: "12px",
   background: "rgba(63, 163, 107, 0.15)",
   border: "1px solid rgba(63, 163, 107, 0.35)",
+  wordBreak: "break-word",
+};
+
+const guardarWrapStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  marginTop: "4px",
 };
 
 const botaoPrincipalStyle: CSSProperties = {
@@ -637,6 +697,7 @@ const botaoPrincipalStyle: CSSProperties = {
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
+  width: "100%",
 };
 
 const botaoSecundarioStyle: CSSProperties = {
@@ -647,6 +708,7 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
 };
 
 const botaoRemoverStyle: CSSProperties = {
@@ -657,4 +719,5 @@ const botaoRemoverStyle: CSSProperties = {
   padding: "14px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
 };

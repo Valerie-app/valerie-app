@@ -715,7 +715,7 @@ export default function AdminFinanceiroPage() {
 
       <section style={contentStyle}>
         <div style={heroStyle}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={eyebrowStyle}>Painel Financeiro</div>
             <h1 style={titleStyle}>Financeiro</h1>
             <p style={subtitleStyle}>
@@ -751,7 +751,7 @@ export default function AdminFinanceiroPage() {
           <h2 style={{ marginTop: 0 }}>Meta e capacidade</h2>
 
           <div style={metaGridStyle}>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={labelStyle}>Meta mensal desejada</label>
               <input
                 value={metaMensalEdit}
@@ -967,7 +967,7 @@ export default function AdminFinanceiroPage() {
                 style={inputStyle}
               >
                 {ESTADOS.map((estado) => (
-                  <option key={estado} value={estado}>
+                  <option key={estado} value={estado} style={{ color: "black" }}>
                     {estado}
                   </option>
                 ))}
@@ -978,12 +978,12 @@ export default function AdminFinanceiroPage() {
                 onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
                 style={inputStyle}
               >
-                <option value="recentes">Mais recentes</option>
-                <option value="valor_desc">Maior valor</option>
-                <option value="valor_asc">Menor valor</option>
-                <option value="lucro_desc">Maior lucro</option>
-                <option value="margem_desc">Maior margem</option>
-                <option value="risco_desc">Maior risco</option>
+                <option value="recentes" style={{ color: "black" }}>Mais recentes</option>
+                <option value="valor_desc" style={{ color: "black" }}>Maior valor</option>
+                <option value="valor_asc" style={{ color: "black" }}>Menor valor</option>
+                <option value="lucro_desc" style={{ color: "black" }}>Maior lucro</option>
+                <option value="margem_desc" style={{ color: "black" }}>Maior margem</option>
+                <option value="risco_desc" style={{ color: "black" }}>Maior risco</option>
               </select>
 
               <button type="button" onClick={limparFiltros} style={botaoSecundarioStyle}>
@@ -1010,8 +1010,8 @@ export default function AdminFinanceiroPage() {
                     return (
                       <div key={processo.id} style={linhaStyle}>
                         <div style={linhaHeaderStyle}>
-                          <div>
-                            <h3 style={{ margin: 0 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <h3 style={{ margin: 0, wordBreak: "break-word" }}>
                               {processo.nome_obra || "Sem nome da obra"}
                             </h3>
                             <p style={subtextoStyle}>
@@ -1119,27 +1119,33 @@ const mainStyle: CSSProperties = {
     "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
   color: "white",
   display: "flex",
+  flexDirection: "column",
+  overflowX: "hidden",
   fontFamily: "Arial, sans-serif",
 };
 
 const asideStyle: CSSProperties = {
-  width: 260,
-  minHeight: "100dvh",
-  padding: "30px 20px",
+  width: "100%",
+  minHeight: "auto",
+  padding: "18px 16px",
   background: "rgba(0,0,0,0.14)",
-  borderRight: "1px solid rgba(255,255,255,0.08)",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  boxSizing: "border-box",
   flexShrink: 0,
 };
 
 const logoStyle: CSSProperties = {
-  fontSize: 36,
-  letterSpacing: 9,
-  marginBottom: 36,
+  fontSize: 28,
+  letterSpacing: 6,
+  marginBottom: 18,
 };
 
 const menuContainerStyle: CSSProperties = {
-  display: "grid",
+  display: "flex",
+  flexDirection: "row",
   gap: 12,
+  overflowX: "auto",
+  paddingBottom: 6,
 };
 
 const menuStyle: CSSProperties = {
@@ -1149,23 +1155,30 @@ const menuStyle: CSSProperties = {
   color: "white",
   textDecoration: "none",
   fontWeight: "bold",
+  whiteSpace: "nowrap",
+  flexShrink: 0,
 };
 
 const contentStyle: CSSProperties = {
   flex: 1,
-  padding: 40,
+  padding: 16,
   overflowX: "hidden",
+  width: "100%",
+  maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 const heroStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 20,
-  padding: 28,
-  borderRadius: 22,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 16,
+  padding: 18,
+  borderRadius: 18,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: 16,
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -1178,48 +1191,53 @@ const eyebrowStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 42,
+  fontSize: 32,
+  wordBreak: "break-word",
 };
 
 const subtitleStyle: CSSProperties = {
   opacity: 0.82,
   marginTop: 10,
   lineHeight: 1.45,
-  maxWidth: 820,
+  maxWidth: "100%",
+  wordBreak: "break-word",
 };
 
 const topActionsStyle: CSSProperties = {
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: 8,
-  flexWrap: "wrap",
-  alignItems: "flex-start",
+  width: "100%",
 };
 
 const mesAtualStyle: CSSProperties = {
-  fontSize: 24,
+  fontSize: 22,
   fontWeight: "bold",
   textTransform: "capitalize",
   marginBottom: 16,
+  wordBreak: "break-word",
 };
 
 const cardStyle: CSSProperties = {
-  padding: 24,
-  borderRadius: 18,
+  padding: 18,
+  borderRadius: 16,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: 18,
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const metaGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1.4fr 1fr 1fr auto",
+  gridTemplateColumns: "1fr",
   gap: 12,
   alignItems: "end",
 };
 
 const resumoGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: 12,
   marginBottom: 18,
 };
@@ -1231,6 +1249,8 @@ const resumoCardStyle: CSSProperties = {
   borderRadius: 14,
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const progressCardStyle: CSSProperties = {
@@ -1239,6 +1259,8 @@ const progressCardStyle: CSSProperties = {
   background: "rgba(255,255,255,0.06)",
   border: "1px solid rgba(255,255,255,0.08)",
   marginBottom: 18,
+  overflow: "hidden",
+  boxSizing: "border-box",
 };
 
 const progressHeaderStyle: CSSProperties = {
@@ -1263,7 +1285,7 @@ const progressInnerStyle: CSSProperties = {
 
 const alertasGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: 12,
   marginBottom: 18,
 };
@@ -1273,18 +1295,21 @@ const alertaCardStyle: CSSProperties = {
   borderRadius: 14,
   display: "grid",
   gap: 8,
+  minWidth: 0,
+  overflow: "hidden",
+  wordBreak: "break-word",
 };
 
 const graficosGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1.4fr 1fr",
+  gridTemplateColumns: "1fr",
   gap: 18,
   marginBottom: 18,
 };
 
 const filtrosStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1.5fr 1fr 1fr auto",
+  gridTemplateColumns: "1fr",
   gap: 12,
   marginBottom: 18,
 };
@@ -1296,17 +1321,19 @@ const linhaStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.06)",
   display: "grid",
   gap: 14,
+  minWidth: 0,
+  overflow: "hidden",
 };
 
 const linhaHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 16,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 12,
 };
 
 const metricsGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: 10,
 };
 
@@ -1317,12 +1344,16 @@ const miniCardStyle: CSSProperties = {
   borderRadius: 12,
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.06)",
+  minWidth: 0,
+  overflow: "hidden",
+  wordBreak: "break-word",
 };
 
 const subtextoStyle: CSSProperties = {
   opacity: 0.82,
   fontSize: 14,
   marginTop: 4,
+  wordBreak: "break-word",
 };
 
 const badgeStyle: CSSProperties = {
@@ -1334,6 +1365,7 @@ const badgeStyle: CSSProperties = {
   fontWeight: "bold",
   fontSize: 12,
   height: "fit-content",
+  width: "fit-content",
 };
 
 const inputStyle: CSSProperties = {
@@ -1344,6 +1376,8 @@ const inputStyle: CSSProperties = {
   background: "rgba(255,255,255,0.06)",
   color: "white",
   outline: "none",
+  boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const labelStyle: CSSProperties = {
@@ -1358,6 +1392,7 @@ const notaStyle: CSSProperties = {
   opacity: 0.75,
   fontSize: 13,
   lineHeight: 1.45,
+  wordBreak: "break-word",
 };
 
 const botaoPrincipalStyle: CSSProperties = {
@@ -1368,6 +1403,8 @@ const botaoPrincipalStyle: CSSProperties = {
   padding: "12px 16px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const botaoSecundarioStyle: CSSProperties = {
@@ -1378,6 +1415,8 @@ const botaoSecundarioStyle: CSSProperties = {
   padding: "12px 14px",
   fontWeight: "bold",
   cursor: "pointer",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const mensagemSucessoStyle: CSSProperties = {
@@ -1386,6 +1425,7 @@ const mensagemSucessoStyle: CSSProperties = {
   borderRadius: 12,
   background: "rgba(63, 163, 107, 0.15)",
   border: "1px solid rgba(63, 163, 107, 0.35)",
+  wordBreak: "break-word",
 };
 
 const mensagemErroStyle: CSSProperties = {
@@ -1394,14 +1434,17 @@ const mensagemErroStyle: CSSProperties = {
   borderRadius: 12,
   background: "rgba(180,50,50,0.18)",
   border: "1px solid rgba(180,50,50,0.35)",
+  wordBreak: "break-word",
 };
 
 const barChartStyle: CSSProperties = {
-  height: 260,
+  height: 240,
   display: "grid",
-  gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-  gap: 10,
+  gridTemplateColumns: "repeat(12, minmax(32px, 1fr))",
+  gap: 8,
   alignItems: "end",
+  overflowX: "auto",
+  paddingBottom: 6,
 };
 
 const barColumnStyle: CSSProperties = {
@@ -1409,7 +1452,7 @@ const barColumnStyle: CSSProperties = {
   display: "grid",
   gridTemplateRows: "1fr auto",
   gap: 8,
-  minWidth: 0,
+  minWidth: 32,
 };
 
 const barAreaStyle: CSSProperties = {
@@ -1461,11 +1504,12 @@ const dotStyle: CSSProperties = {
 };
 
 const smallBarHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 4,
   marginBottom: 6,
   fontSize: 14,
+  wordBreak: "break-word",
 };
 
 const smallBarOuterStyle: CSSProperties = {
@@ -1483,7 +1527,7 @@ const smallBarInnerStyle: CSSProperties = {
 
 const healthGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: 14,
 };
 
