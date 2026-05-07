@@ -3,7 +3,8 @@
 /*
   PAGE.TSX COMPLETO — Calendário Admin
   Inclui:
-  - Produção por meta diária
+  - Produção por meta diária a 100%
+  - VAL visível no calendário
   - VAL criado na app com data mais próxima automática
   - VAL importado/manual com datas editáveis
   - Produção, acabamentos e montagens
@@ -20,6 +21,7 @@ import LogoutButton from "@/components/LogoutButton";
 
 type ProcessoCalendario = {
   id: string;
+  codigo_val: string | null;
   nome_cliente: string | null;
   nome_obra: string | null;
   estado: string | null;
@@ -84,6 +86,7 @@ type PlaneamentoProcesso = {
   datasProducao: string[];
   datasAcabamento: string[];
   datasMontagem: string[];
+  valorProducaoPorDia: Record<string, number>;
   inicioProducao: string | null;
   fimProducao: string | null;
   inicioAcabamento: string | null;
@@ -129,7 +132,7 @@ const DESBLOQUEIO_FIM_SEMANA = "__FIM_SEMANA_DESBLOQUEADO__";
 const ESTADOS_DISPONIVEIS = ["Todos", "Validado"] as const;
 
 const COLUNAS_PROCESSOS =
-  "id, nome_cliente, nome_obra, estado, dias_fabrico_previstos, dias_acabamento_previstos, dias_montagem_previstos, dias_totais_previstos, data_inicio_prevista, data_entrega_prevista, valor_diario_referencia, valor_estimado, valor_estimado_com_desconto, valor_final, created_at, responsavel_obra_nome, responsavel_obra_email, responsavel_acabamentos_nome, responsavel_acabamentos_email, responsavel_montagem_nome, responsavel_montagem_email, admin_alerta_email, data_inicio_producao_manual, data_fim_producao_manual, data_inicio_acabamento_manual, data_fim_acabamento_manual, data_inicio_montagem_manual, data_fim_montagem_manual, calendario_arquivado";
+  "id, codigo_val, nome_cliente, nome_obra, estado, dias_fabrico_previstos, dias_acabamento_previstos, dias_montagem_previstos, dias_totais_previstos, data_inicio_prevista, data_entrega_prevista, valor_diario_referencia, valor_estimado, valor_estimado_com_desconto, valor_final, created_at, responsavel_obra_nome, responsavel_obra_email, responsavel_acabamentos_nome, responsavel_acabamentos_email, responsavel_montagem_nome, responsavel_montagem_email, admin_alerta_email, data_inicio_producao_manual, data_fim_producao_manual, data_inicio_acabamento_manual, data_fim_acabamento_manual, data_inicio_montagem_manual, data_fim_montagem_manual, calendario_arquivado";
 
 export default function AdminCalendarioPage() {
   const router = useRouter();
@@ -492,36 +495,21 @@ export default function AdminCalendarioPage() {
   }
 
   function obterDiasProducaoNecessarios(processo: ProcessoCalendario) {
-    const diasGuardados = Number(processo.dias_totais_previstos || 0);
-
-    if (diasGuardados > 0) {
-      return Math.max(Math.ceil(diasGuardados), 1);
-    }
-
     const valor = obterValorFinanceiroProcesso(processo);
 
     if (resumo.objetivoDiario > 0 && valor > 0) {
       return Math.max(Math.ceil(valor / resumo.objetivoDiario), 1);
     }
 
-    return Math.max(Number(processo.dias_fabrico_previstos || 0), 1);
+    const diasGuardados = Number(
+      processo.dias_fabrico_previstos || processo.dias_totais_previstos || 0
+    );
+
+    return Math.max(Math.ceil(diasGuardados), 1);
   }
 
   function obterDiasAcabamentoNecessarios(processo: ProcessoCalendario) {
     return Math.max(Number(processo.dias_acabamento_previstos || 0), 0);
-  }
-
-  function obterValorDiarioProcesso(processo: ProcessoCalendario) {
-    const valorDiarioGuardado = Number(processo.valor_diario_referencia || 0);
-
-    if (valorDiarioGuardado > 0) {
-      return valorDiarioGuardado;
-    }
-
-    const valor = obterValorFinanceiroProcesso(processo);
-    const dias = obterDiasProducaoNecessarios(processo);
-
-    return dias > 0 ? valor / dias : 0;
   }
 
   const processosValidados = useMemo(() => {
@@ -543,12 +531,14 @@ export default function AdminCalendarioPage() {
       const textoPesquisa = normalizarTexto(pesquisa);
       const nomeObra = normalizarTexto(processo.nome_obra);
       const nomeCliente = normalizarTexto(processo.nome_cliente);
+      const codigoVal = normalizarTexto(processo.codigo_val);
       const estado = processo.estado || "";
 
       const passaPesquisa =
         textoPesquisa === "" ||
         nomeObra.includes(textoPesquisa) ||
-        nomeCliente.includes(textoPesquisa);
+        nomeCliente.includes(textoPesquisa) ||
+        codigoVal.includes(textoPesquisa);
 
       const passaEstado = filtroEstado === "Todos" || estado === filtroEstado;
 
@@ -653,9 +643,19 @@ export default function AdminCalendarioPage() {
 
   function calcularPlaneamentos(listaProcessos: ProcessoCalendario[]) {
     const processosOrdenados = [...listaProcessos].sort((a, b) => {
-      const dataA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dataB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dataA - dataB;
+      const dataInicioA = a.data_inicio_prevista
+        ? parseDateOnly(a.data_inicio_prevista).getTime()
+        : a.created_at
+        ? new Date(a.created_at).getTime()
+        : 0;
+
+      const dataInicioB = b.data_inicio_prevista
+        ? parseDateOnly(b.data_inicio_prevista).getTime()
+        : b.created_at
+        ? new Date(b.created_at).getTime()
+        : 0;
+
+      return dataInicioA - dataInicioB;
     });
 
     const resultado: PlaneamentoProcesso[] = [];
@@ -685,39 +685,71 @@ export default function AdminCalendarioPage() {
       const temMontagemManual = datasMontagemManuais.length > 0;
 
       let datasProducao: string[] = [];
+      const valorProducaoPorDia: Record<string, number> = {};
+      const valorTotalProcesso = obterValorFinanceiroProcesso(processo);
 
       if (temProducaoManual) {
         datasProducao = datasProducaoManuais;
-      } else {
-        const valorDiario = obterValorDiarioProcesso(processo);
-        const diasProducao = obterDiasProducaoNecessarios(processo);
 
+        if (datasProducao.length > 0) {
+          const valorPorDiaManual = valorTotalProcesso / datasProducao.length;
+
+          for (const dataManual of datasProducao) {
+            valorProducaoPorDia[dataManual] = valorPorDiaManual;
+            cargaProducaoPorDia[dataManual] =
+              (cargaProducaoPorDia[dataManual] || 0) + valorPorDiaManual;
+          }
+        }
+      } else {
         const dataInicioPreferida = processo.data_inicio_prevista
           ? parseDateOnly(processo.data_inicio_prevista)
           : hoje;
 
         let cursor = proximoDiaUtil(dataInicioPreferida);
+        let valorRestante = valorTotalProcesso;
         let seguranca = 0;
 
-        while (datasProducao.length < diasProducao && seguranca < 1460) {
+        while (valorRestante > 0.009 && seguranca < 1460) {
           const chave = formatarDataISO(cursor);
 
           if (eDiaUtil(cursor)) {
             const cargaAtual = cargaProducaoPorDia[chave] || 0;
-            const novaCarga = cargaAtual + valorDiario;
+            const capacidadeDia =
+              resumo.objetivoDiario > 0
+                ? Math.max(resumo.objetivoDiario - cargaAtual, 0)
+                : valorRestante;
 
-            if (
-              !resumo.objetivoDiario ||
-              resumo.objetivoDiario <= 0 ||
-              novaCarga <= resumo.objetivoDiario
-            ) {
-              datasProducao.push(chave);
-              cargaProducaoPorDia[chave] = novaCarga;
+            if (capacidadeDia > 0) {
+              const valorAReservar = Math.min(valorRestante, capacidadeDia);
+
+              if (!datasProducao.includes(chave)) {
+                datasProducao.push(chave);
+              }
+
+              valorProducaoPorDia[chave] =
+                (valorProducaoPorDia[chave] || 0) + valorAReservar;
+
+              cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
+              valorRestante -= valorAReservar;
             }
           }
 
           cursor.setDate(cursor.getDate() + 1);
           seguranca += 1;
+        }
+
+        if (datasProducao.length === 0) {
+          const diasFallback = obterDiasProducaoNecessarios(processo);
+          datasProducao = adicionarDiasUteis(dataInicioPreferida, diasFallback);
+
+          const valorFallback =
+            datasProducao.length > 0 ? valorTotalProcesso / datasProducao.length : 0;
+
+          for (const dataFallback of datasProducao) {
+            valorProducaoPorDia[dataFallback] = valorFallback;
+            cargaProducaoPorDia[dataFallback] =
+              (cargaProducaoPorDia[dataFallback] || 0) + valorFallback;
+          }
         }
       }
 
@@ -746,6 +778,7 @@ export default function AdminCalendarioPage() {
         datasProducao,
         datasAcabamento,
         datasMontagem,
+        valorProducaoPorDia,
         inicioProducao: datasProducao[0] || null,
         fimProducao,
         inicioAcabamento: datasAcabamento[0] || null,
@@ -776,15 +809,17 @@ export default function AdminCalendarioPage() {
       if (planeamento.processo.calendario_arquivado) continue;
 
       const obra = planeamento.processo.nome_obra || "Sem nome";
+      const val = planeamento.processo.codigo_val || "Sem VAL";
+      const nome = `${val} · ${obra}`;
 
       const eventos = [
-        { titulo: "Começar produção", texto: `${obra} deve começar produção.`, data: planeamento.inicioProducao },
-        { titulo: "Produção a terminar", texto: `${obra} termina produção.`, data: planeamento.fimProducao },
-        { titulo: "Entra em acabamentos", texto: `${obra} entra em acabamentos.`, data: planeamento.inicioAcabamento },
-        { titulo: "Sai de acabamentos", texto: `${obra} sai de acabamentos.`, data: planeamento.fimAcabamento },
-        { titulo: "Começar montagem", texto: `${obra} deve começar montagem.`, data: planeamento.inicioMontagem },
-        { titulo: "Montagem a terminar", texto: `${obra} termina montagem.`, data: planeamento.fimMontagem },
-        { titulo: "Pronto para entrega", texto: `${obra} fica pronto para entrega.`, data: planeamento.dataEntregaCalculada },
+        { titulo: "Começar produção", texto: `${nome} deve começar produção.`, data: planeamento.inicioProducao },
+        { titulo: "Produção a terminar", texto: `${nome} termina produção.`, data: planeamento.fimProducao },
+        { titulo: "Entra em acabamentos", texto: `${nome} entra em acabamentos.`, data: planeamento.inicioAcabamento },
+        { titulo: "Sai de acabamentos", texto: `${nome} sai de acabamentos.`, data: planeamento.fimAcabamento },
+        { titulo: "Começar montagem", texto: `${nome} deve começar montagem.`, data: planeamento.inicioMontagem },
+        { titulo: "Montagem a terminar", texto: `${nome} termina montagem.`, data: planeamento.fimMontagem },
+        { titulo: "Pronto para entrega", texto: `${nome} fica pronto para entrega.`, data: planeamento.dataEntregaCalculada },
       ];
 
       for (const evento of eventos) {
@@ -829,6 +864,12 @@ export default function AdminCalendarioPage() {
     return obterPlaneamentosDoDia(data).map((item) => item.processo);
   }
 
+  function obterValorProducaoDoProcessoNoDia(processoId: string, data: Date) {
+    const chave = formatarDataISO(data);
+    const planeamento = obterPlaneamentoProcesso(processoId);
+    return Number(planeamento?.valorProducaoPorDia[chave] || 0);
+  }
+
   function obterValorPrevistoDoDia(data: Date) {
     const bloqueio = obterBloqueioDoDia(data);
 
@@ -836,12 +877,11 @@ export default function AdminCalendarioPage() {
     if (eBloqueioManual(data)) return 0;
     if (eFimDeSemana(data) && !eDesbloqueioFimSemana(bloqueio)) return 0;
 
-    const processosDoDia = obterProcessosDoDia(data);
+    const chave = formatarDataISO(data);
 
-    return processosDoDia.reduce(
-      (acc, processo) => acc + obterValorDiarioProcesso(processo),
-      0
-    );
+    return planeamentosVisiveis.reduce((acc, planeamento) => {
+      return acc + Number(planeamento.valorProducaoPorDia[chave] || 0);
+    }, 0);
   }
 
   function obterDiasFinanceirosDoDia(data: Date) {
@@ -876,7 +916,7 @@ export default function AdminCalendarioPage() {
 
     const percentagem = valorDia / objetivoDiario;
 
-    if (percentagem >= 1) {
+    if (percentagem >= 0.995) {
       return {
         fundo: "rgba(52,168,83,0.20)",
         borda: "rgba(52,168,83,0.55)",
@@ -1106,6 +1146,8 @@ export default function AdminCalendarioPage() {
 
       const payloadFinal = {
         ...payload,
+        data_inicio_prevista:
+          payload.data_inicio_producao_manual || processo.data_inicio_prevista,
         data_entrega_prevista:
           planeamentoAtualizado?.dataEntregaCalculada || processo.data_entrega_prevista,
       };
@@ -1306,6 +1348,7 @@ export default function AdminCalendarioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           processoId: processo.id,
+          codigoVal: processo.codigo_val || "Sem VAL",
           emails,
           obra: processo.nome_obra || "Sem nome",
           cliente: processo.nome_cliente || "—",
@@ -1592,7 +1635,7 @@ export default function AdminCalendarioPage() {
           <input
             value={pesquisa}
             onChange={(e) => setPesquisa(e.target.value)}
-            placeholder="Pesquisar obra ou cliente"
+            placeholder="Pesquisar obra, cliente ou VAL"
             style={estilos.inputFiltroStyle}
           />
 
@@ -1653,7 +1696,7 @@ export default function AdminCalendarioPage() {
           </div>
 
           <div style={estilos.metaAjudaStyle}>
-            A produção é reservada por valor diário. Exemplo: se a meta diária for 5000 € e a obra valer 7500 €, são reservados 2 dias úteis. Se existir data de início prevista, começa nessa data; caso contrário, começa na próxima data útil disponível.
+            A produção agora enche os dias até à meta diária. Exemplo: se a meta for 5077 € e uma obra valer 7500 €, o primeiro dia reserva 5077 € e o restante vai para o próximo dia disponível, podendo ser completado por outra obra.
           </div>
         </div>
 
@@ -1780,7 +1823,7 @@ export default function AdminCalendarioPage() {
                             >
                               <div style={{ minWidth: 0 }}>
                                 <div style={estilos.timelineTituloStyle}>
-                                  {estaAberto ? "▾" : "▸"} {item.processo.nome_obra || "Sem nome"}
+                                  {estaAberto ? "▾" : "▸"} {item.processo.codigo_val || "Sem VAL"} · {item.processo.nome_obra || "Sem nome"}
                                 </div>
                                 <div style={estilos.subtextoStyle}>
                                   Cliente: {item.processo.nome_cliente || "—"}
@@ -2266,13 +2309,14 @@ export default function AdminCalendarioPage() {
                           processosDoDia.slice(0, limiteEventos).map((processo) => {
                             const planeamento = obterPlaneamentoProcesso(processo.id);
                             const cores = obterCoresEstado(processo.estado);
+                            const valorProcessoDia = obterValorProducaoDoProcessoNoDia(processo.id, dia.data);
 
                             return (
                               <div
                                 key={`${dia.chave}-${processo.id}`}
-                                title={`${processo.nome_obra || "Obra"} | Cliente: ${
-                                  processo.nome_cliente || "—"
-                                }`}
+                                title={`${processo.codigo_val || "Sem VAL"} | ${
+                                  processo.nome_obra || "Obra"
+                                } | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`}
                                 style={{
                                   ...estilos.eventoStyle,
                                   background: cores.fundo,
@@ -2281,7 +2325,7 @@ export default function AdminCalendarioPage() {
                               >
                                 {planeamento?.temDatasManuais ? "✎ " : ""}
                                 {processo.calendario_arquivado ? "🗄 " : ""}
-                                {processo.nome_obra || "Sem nome"}
+                                {processo.codigo_val || "Sem VAL"} · {processo.nome_obra || processo.nome_cliente || "Sem nome"}
                               </div>
                             );
                           })
@@ -2391,16 +2435,25 @@ export default function AdminCalendarioPage() {
                   <div style={{ display: "grid", gap: "10px" }}>
                     {processosDiaSelecionado.map((processo) => {
                       const planeamento = obterPlaneamentoProcesso(processo.id);
+                      const valorProcessoDia = diaSelecionado
+                        ? obterValorProducaoDoProcessoNoDia(processo.id, diaSelecionado)
+                        : 0;
 
                       return (
                         <div key={processo.id} style={estilos.processoDiaCardStyle}>
                           <div style={{ fontWeight: "bold" }}>
-                            {processo.nome_obra || "Sem nome"}
+                            {processo.codigo_val || "Sem VAL"} · {processo.nome_obra || "Sem nome"}
                           </div>
 
                           <div style={estilos.subtextoStyle}>
                             Cliente: {processo.nome_cliente || "—"}
                           </div>
+
+                          {tipoCalendario === "producao" && (
+                            <div style={estilos.subtextoStyle}>
+                              Valor reservado neste dia: {valorProcessoDia.toFixed(2)} €
+                            </div>
+                          )}
 
                           <div style={estilos.subtextoStyle}>
                             Responsável obra: {processo.responsavel_obra_nome || "—"} ·{" "}
@@ -2415,10 +2468,6 @@ export default function AdminCalendarioPage() {
                           <div style={estilos.subtextoStyle}>
                             Montagem: {processo.responsavel_montagem_nome || "—"} ·{" "}
                             {processo.responsavel_montagem_email || "sem email"}
-                          </div>
-
-                          <div style={estilos.subtextoStyle}>
-                            Valor/dia produção: {obterValorDiarioProcesso(processo).toFixed(2)} €
                           </div>
 
                           <div style={estilos.subtextoStyle}>
