@@ -5,13 +5,10 @@
   Inclui:
   - Produção por meta diária a 100%
   - VAL visível no calendário
-  - VAL criado na app com data mais próxima automática
-  - VAL importado/manual com datas editáveis
-  - Produção, acabamentos e montagens
-  - Datas manuais
-  - Arquivar/restaurar obras
-  - Cartões minimizáveis
-  - Responsáveis e emails
+  - Produção não é mexida quando ajustas acabamentos/montagens
+  - Se houver montagem ou fim de acabamento e dias de acabamento, o acabamento é calculado para trás
+  - Exemplo: fim acabamento 26/05 + 7 dias úteis => início acabamento 18/05
+  - Datas manuais, arquivo, responsáveis, emails e bloqueios
 */
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -148,7 +145,6 @@ export default function AdminCalendarioPage() {
   const [larguraJanela, setLarguraJanela] = useState(1200);
   const [tipoCalendario, setTipoCalendario] = useState<TipoCalendario>("producao");
   const [filtroArquivo, setFiltroArquivo] = useState<FiltroArquivo>("ativas");
-
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] =
     useState<(typeof ESTADOS_DISPONIVEIS)[number]>("Todos");
@@ -205,7 +201,6 @@ export default function AdminCalendarioPage() {
   async function validarAdmin() {
     try {
       const { data: sessaoData, error: sessaoError } = await supabase.auth.getSession();
-
       if (sessaoError) throw sessaoError;
 
       const user = sessaoData.session?.user;
@@ -317,7 +312,7 @@ export default function AdminCalendarioPage() {
       console.error(error);
       setMensagem(
         error?.message ||
-          "Erro ao carregar calendário. Confirma se já criaste as colunas novas no Supabase."
+          "Erro ao carregar calendário. Confirma se as colunas novas existem no Supabase."
       );
     } finally {
       setACarregar(false);
@@ -407,6 +402,21 @@ export default function AdminCalendarioPage() {
     return data;
   }
 
+  function diaUtilAnterior(dataBase: Date) {
+    const data = new Date(dataBase);
+    data.setHours(0, 0, 0, 0);
+    data.setDate(data.getDate() - 1);
+
+    let seguranca = 0;
+
+    while (!eDiaUtil(data) && seguranca < 730) {
+      data.setDate(data.getDate() - 1);
+      seguranca += 1;
+    }
+
+    return data;
+  }
+
   function adicionarDiasUteis(dataBase: Date, dias: number) {
     const datas: string[] = [];
     const data = new Date(dataBase);
@@ -420,6 +430,25 @@ export default function AdminCalendarioPage() {
       }
 
       data.setDate(data.getDate() + 1);
+      seguranca += 1;
+    }
+
+    return datas;
+  }
+
+  function subtrairDiasUteisAteFim(fimBase: Date, dias: number) {
+    const datas: string[] = [];
+    const data = new Date(fimBase);
+    data.setHours(0, 0, 0, 0);
+
+    let seguranca = 0;
+
+    while (datas.length < dias && seguranca < 730) {
+      if (eDiaUtil(data)) {
+        datas.unshift(formatarDataISO(data));
+      }
+
+      data.setDate(data.getDate() - 1);
       seguranca += 1;
     }
 
@@ -512,6 +541,46 @@ export default function AdminCalendarioPage() {
     return Math.max(Number(processo.dias_acabamento_previstos || 0), 0);
   }
 
+  function calcularAcabamentosSemMexerNaProducao(processo: ProcessoCalendario, fimProducao: string | null) {
+    const diasAcabamento = obterDiasAcabamentoNecessarios(processo);
+
+    if (processo.data_inicio_acabamento_manual && processo.data_fim_acabamento_manual) {
+      return obterIntervaloDiasUteis(
+        processo.data_inicio_acabamento_manual,
+        processo.data_fim_acabamento_manual
+      );
+    }
+
+    if (diasAcabamento <= 0) return [];
+
+    if (processo.data_fim_acabamento_manual) {
+      return subtrairDiasUteisAteFim(
+        parseDateOnly(processo.data_fim_acabamento_manual),
+        diasAcabamento
+      );
+    }
+
+    if (processo.data_inicio_montagem_manual) {
+      const fimAcabamentoAntesMontagem = diaUtilAnterior(
+        parseDateOnly(processo.data_inicio_montagem_manual)
+      );
+
+      return subtrairDiasUteisAteFim(fimAcabamentoAntesMontagem, diasAcabamento);
+    }
+
+    if (processo.data_inicio_acabamento_manual) {
+      return adicionarDiasUteis(parseDateOnly(processo.data_inicio_acabamento_manual), diasAcabamento);
+    }
+
+    if (fimProducao) {
+      const inicioAcabamento = parseDateOnly(fimProducao);
+      inicioAcabamento.setDate(inicioAcabamento.getDate() + 1);
+      return adicionarDiasUteis(inicioAcabamento, diasAcabamento);
+    }
+
+    return [];
+  }
+
   const processosValidados = useMemo(() => {
     return processos.filter((processo) => processo.estado === "Validado");
   }, [processos]);
@@ -549,48 +618,27 @@ export default function AdminCalendarioPage() {
   const diasDoMes = useMemo<DiaMes[]>(() => {
     const ano = mesAtual.getFullYear();
     const mes = mesAtual.getMonth();
-
     const primeiroDia = new Date(ano, mes, 1);
     const ultimoDia = new Date(ano, mes + 1, 0);
-
     const primeiroDiaSemana = (primeiroDia.getDay() + 6) % 7;
     const totalDiasMes = ultimoDia.getDate();
-
     const dias: DiaMes[] = [];
 
     for (let i = primeiroDiaSemana; i > 0; i--) {
       const data = new Date(ano, mes, 1 - i);
-
-      dias.push({
-        data,
-        chave: formatarDataISO(data),
-        dia: data.getDate(),
-        pertenceAoMesAtual: false,
-      });
+      dias.push({ data, chave: formatarDataISO(data), dia: data.getDate(), pertenceAoMesAtual: false });
     }
 
     for (let dia = 1; dia <= totalDiasMes; dia++) {
       const data = new Date(ano, mes, dia);
-
-      dias.push({
-        data,
-        chave: formatarDataISO(data),
-        dia,
-        pertenceAoMesAtual: true,
-      });
+      dias.push({ data, chave: formatarDataISO(data), dia, pertenceAoMesAtual: true });
     }
 
     while (dias.length < 42) {
       const ultimo = dias[dias.length - 1].data;
       const proximo = new Date(ultimo);
       proximo.setDate(ultimo.getDate() + 1);
-
-      dias.push({
-        data: proximo,
-        chave: formatarDataISO(proximo),
-        dia: proximo.getDate(),
-        pertenceAoMesAtual: false,
-      });
+      dias.push({ data: proximo, chave: formatarDataISO(proximo), dia: proximo.getDate(), pertenceAoMesAtual: false });
     }
 
     return dias;
@@ -599,29 +647,16 @@ export default function AdminCalendarioPage() {
   const resumo = useMemo(() => {
     const ano = mesAtual.getFullYear();
     const mesIndex = mesAtual.getMonth();
-
     const objetivoMensal = Number(metaAtual?.objetivo_mensal || 0);
     const objetivoAnual = objetivoMensal * 12;
-
     const diasUteisAno = contarDiasUteisAno(ano);
     const bloqueiosUteisAno = obterBloqueiosUteisDoAno(ano).length;
     const diasUteisReaisAno = Math.max(diasUteisAno, 0);
-
     const diasUteisMes = contarDiasUteisMes(ano, mesIndex);
     const diasUteisReaisMes = Math.max(diasUteisMes, 0);
-
-    const objetivoDiario =
-      diasUteisReaisAno > 0 ? objetivoAnual / diasUteisReaisAno : 0;
-
-    const valorPrevisto = processosValidados.reduce(
-      (acc, processo) => acc + obterValorFinanceiroProcesso(processo),
-      0
-    );
-
-    const totalArquivados = processosValidados.filter(
-      (processo) => processo.calendario_arquivado === true
-    ).length;
-
+    const objetivoDiario = diasUteisReaisAno > 0 ? objetivoAnual / diasUteisReaisAno : 0;
+    const valorPrevisto = processosValidados.reduce((acc, processo) => acc + obterValorFinanceiroProcesso(processo), 0);
+    const totalArquivados = processosValidados.filter((processo) => processo.calendario_arquivado === true).length;
     const totalAtivos = processosValidados.length - totalArquivados;
 
     return {
@@ -660,7 +695,6 @@ export default function AdminCalendarioPage() {
 
     const resultado: PlaneamentoProcesso[] = [];
     const cargaProducaoPorDia: Record<string, number> = {};
-
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
@@ -670,20 +704,13 @@ export default function AdminCalendarioPage() {
         processo.data_fim_producao_manual || null
       );
 
-      const datasAcabamentoManuais = obterIntervaloDiasUteis(
-        processo.data_inicio_acabamento_manual || null,
-        processo.data_fim_acabamento_manual || null
-      );
-
       const datasMontagemManuais = obterIntervaloDiasUteis(
         processo.data_inicio_montagem_manual || null,
         processo.data_fim_montagem_manual || null
       );
 
       const temProducaoManual = datasProducaoManuais.length > 0;
-      const temAcabamentoManual = datasAcabamentoManuais.length > 0;
       const temMontagemManual = datasMontagemManuais.length > 0;
-
       let datasProducao: string[] = [];
       const valorProducaoPorDia: Record<string, number> = {};
       const valorTotalProcesso = obterValorFinanceiroProcesso(processo);
@@ -741,9 +768,7 @@ export default function AdminCalendarioPage() {
         if (datasProducao.length === 0) {
           const diasFallback = obterDiasProducaoNecessarios(processo);
           datasProducao = adicionarDiasUteis(dataInicioPreferida, diasFallback);
-
-          const valorFallback =
-            datasProducao.length > 0 ? valorTotalProcesso / datasProducao.length : 0;
+          const valorFallback = datasProducao.length > 0 ? valorTotalProcesso / datasProducao.length : 0;
 
           for (const dataFallback of datasProducao) {
             valorProducaoPorDia[dataFallback] = valorFallback;
@@ -754,24 +779,17 @@ export default function AdminCalendarioPage() {
       }
 
       const fimProducao = datasProducao[datasProducao.length - 1] || null;
-      let datasAcabamento: string[] = [];
-
-      if (temAcabamentoManual) {
-        datasAcabamento = datasAcabamentoManuais;
-      } else if (fimProducao && obterDiasAcabamentoNecessarios(processo) > 0) {
-        const inicioAcabamento = parseDateOnly(fimProducao);
-        inicioAcabamento.setDate(inicioAcabamento.getDate() + 1);
-
-        datasAcabamento = adicionarDiasUteis(
-          inicioAcabamento,
-          obterDiasAcabamentoNecessarios(processo)
-        );
-      }
-
+      const datasAcabamento = calcularAcabamentosSemMexerNaProducao(processo, fimProducao);
+      const inicioAcabamento = datasAcabamento[0] || null;
       const fimAcabamento = datasAcabamento[datasAcabamento.length - 1] || null;
       const datasMontagem = temMontagemManual ? datasMontagemManuais : [];
+      const inicioMontagem = datasMontagem[0] || null;
       const fimMontagem = datasMontagem[datasMontagem.length - 1] || null;
       const dataEntregaCalculada = fimMontagem || fimAcabamento || fimProducao;
+      const temAcabamentoManual =
+        !!processo.data_inicio_acabamento_manual ||
+        !!processo.data_fim_acabamento_manual ||
+        (!!processo.data_inicio_montagem_manual && obterDiasAcabamentoNecessarios(processo) > 0);
 
       resultado.push({
         processo,
@@ -781,9 +799,9 @@ export default function AdminCalendarioPage() {
         valorProducaoPorDia,
         inicioProducao: datasProducao[0] || null,
         fimProducao,
-        inicioAcabamento: datasAcabamento[0] || null,
+        inicioAcabamento,
         fimAcabamento,
-        inicioMontagem: datasMontagem[0] || null,
+        inicioMontagem,
         fimMontagem,
         dataEntregaCalculada,
         temDatasManuais: temProducaoManual || temAcabamentoManual || temMontagemManual,
@@ -824,9 +842,7 @@ export default function AdminCalendarioPage() {
 
       for (const evento of eventos) {
         if (!evento.data) continue;
-
         const diasAte = diferencaDias(evento.data);
-
         if (diasAte < 0 || diasAte > 10) continue;
 
         lista.push({
@@ -853,7 +869,6 @@ export default function AdminCalendarioPage() {
 
     return planeamentosVisiveis.filter((item) => {
       if (item.processo.calendario_arquivado && filtroArquivo === "ativas") return false;
-
       if (tipoCalendario === "producao") return item.datasProducao.includes(chave);
       if (tipoCalendario === "acabamentos") return item.datasAcabamento.includes(chave);
       return item.datasMontagem.includes(chave);
@@ -872,11 +887,9 @@ export default function AdminCalendarioPage() {
 
   function obterValorPrevistoDoDia(data: Date) {
     const bloqueio = obterBloqueioDoDia(data);
-
     if (tipoCalendario !== "producao") return 0;
     if (eBloqueioManual(data)) return 0;
     if (eFimDeSemana(data) && !eDesbloqueioFimSemana(bloqueio)) return 0;
-
     const chave = formatarDataISO(data);
 
     return planeamentosVisiveis.reduce((acc, planeamento) => {
@@ -891,104 +904,47 @@ export default function AdminCalendarioPage() {
 
   function obterEstiloFinanceiroDia(valorDia: number, objetivoDiario: number) {
     if (tipoCalendario === "acabamentos") {
-      return {
-        fundo: "rgba(66,133,244,0.14)",
-        borda: "rgba(66,133,244,0.35)",
-        texto: "#9fc3ff",
-      };
+      return { fundo: "rgba(66,133,244,0.14)", borda: "rgba(66,133,244,0.35)", texto: "#9fc3ff" };
     }
 
     if (tipoCalendario === "montagens") {
-      return {
-        fundo: "rgba(156,39,176,0.14)",
-        borda: "rgba(186,104,200,0.45)",
-        texto: "#e1bee7",
-      };
+      return { fundo: "rgba(156,39,176,0.14)", borda: "rgba(186,104,200,0.45)", texto: "#e1bee7" };
     }
 
     if (!objetivoDiario || objetivoDiario <= 0) {
-      return {
-        fundo: "rgba(255,255,255,0.06)",
-        borda: "rgba(255,255,255,0.10)",
-        texto: "white",
-      };
+      return { fundo: "rgba(255,255,255,0.06)", borda: "rgba(255,255,255,0.10)", texto: "white" };
     }
 
     const percentagem = valorDia / objetivoDiario;
 
     if (percentagem >= 0.995) {
-      return {
-        fundo: "rgba(52,168,83,0.20)",
-        borda: "rgba(52,168,83,0.55)",
-        texto: "#9df5b4",
-      };
+      return { fundo: "rgba(52,168,83,0.20)", borda: "rgba(52,168,83,0.55)", texto: "#9df5b4" };
     }
 
     if (percentagem >= 0.75) {
-      return {
-        fundo: "rgba(244,180,0,0.18)",
-        borda: "rgba(244,180,0,0.50)",
-        texto: "#ffd76c",
-      };
+      return { fundo: "rgba(244,180,0,0.18)", borda: "rgba(244,180,0,0.50)", texto: "#ffd76c" };
     }
 
-    return {
-      fundo: "rgba(234,67,53,0.16)",
-      borda: "rgba(234,67,53,0.50)",
-      texto: "#ff9d9d",
-    };
+    return { fundo: "rgba(234,67,53,0.16)", borda: "rgba(234,67,53,0.50)", texto: "#ff9d9d" };
   }
 
   function obterCoresEstado(estado: string | null) {
-    if (tipoCalendario === "montagens") {
-      return {
-        fundo: "rgba(156,39,176,0.78)",
-        borda: "rgba(186,104,200,1)",
-      };
-    }
-
-    if (tipoCalendario === "acabamentos") {
-      return {
-        fundo: "rgba(66,133,244,0.78)",
-        borda: "rgba(66,133,244,1)",
-      };
-    }
-
-    if (estado === "Validado") {
-      return {
-        fundo: "rgba(52,168,83,0.88)",
-        borda: "rgba(52,168,83,1)",
-      };
-    }
-
-    return {
-      fundo: "rgba(127,140,141,0.82)",
-      borda: "rgba(127,140,141,1)",
-    };
+    if (tipoCalendario === "montagens") return { fundo: "rgba(156,39,176,0.78)", borda: "rgba(186,104,200,1)" };
+    if (tipoCalendario === "acabamentos") return { fundo: "rgba(66,133,244,0.78)", borda: "rgba(66,133,244,1)" };
+    if (estado === "Validado") return { fundo: "rgba(52,168,83,0.88)", borda: "rgba(52,168,83,1)" };
+    return { fundo: "rgba(127,140,141,0.82)", borda: "rgba(127,140,141,1)" };
   }
 
   function obterEstiloAlerta(nivel: AlertaPlaneamento["nivel"]) {
     if (nivel === "urgente") {
-      return {
-        background: "rgba(234,67,53,0.18)",
-        border: "1px solid rgba(234,67,53,0.45)",
-        color: "#ffb0b0",
-      };
+      return { background: "rgba(234,67,53,0.18)", border: "1px solid rgba(234,67,53,0.45)", color: "#ffb0b0" };
     }
 
     if (nivel === "breve") {
-      return {
-        background: "rgba(244,180,0,0.16)",
-        border: "1px solid rgba(244,180,0,0.40)",
-        color: "#ffd76c",
-      };
+      return { background: "rgba(244,180,0,0.16)", border: "1px solid rgba(244,180,0,0.40)", color: "#ffd76c" };
     }
 
-    return {
-      background: "rgba(66,133,244,0.14)",
-      border: "1px solid rgba(66,133,244,0.35)",
-      color: "#9fc3ff",
-    };
+    return { background: "rgba(66,133,244,0.14)", border: "1px solid rgba(66,133,244,0.35)", color: "#9fc3ff" };
   }
 
   function limparFiltros() {
@@ -1012,7 +968,6 @@ export default function AdminCalendarioPage() {
 
   function abrirModalBloqueio(data: Date) {
     const bloqueioExistente = obterBloqueioDoDia(data);
-
     setDiaSelecionado(data);
     setMotivoBloqueio(
       bloqueioExistente?.motivo === DESBLOQUEIO_FIM_SEMANA
@@ -1027,17 +982,13 @@ export default function AdminCalendarioPage() {
   }
 
   function alternarCartao(processoId: string) {
-    setCartoesAbertos((prev) => ({
-      ...prev,
-      [processoId]: !prev[processoId],
-    }));
+    setCartoesAbertos((prev) => ({ ...prev, [processoId]: !prev[processoId] }));
   }
 
   async function guardarContactos(processo: ProcessoCalendario) {
     try {
       setProcessoAGuardarContactos(processo.id);
       setMensagem("");
-
       const valores = contactosEdit[processo.id];
 
       const payload = {
@@ -1066,12 +1017,43 @@ export default function AdminCalendarioPage() {
     }
   }
 
+  function normalizarDatasAntesDeGuardar(processo: ProcessoCalendario, valoresOriginais: DatasManuaisEdit) {
+    const valores: DatasManuaisEdit = { ...valoresOriginais };
+    const diasAcabamento = Number(diasAcabamentoEdit[processo.id] || processo.dias_acabamento_previstos || 0);
+
+    if (diasAcabamento > 0) {
+      if (!valores.data_inicio_acabamento_manual && valores.data_fim_acabamento_manual) {
+        const datas = subtrairDiasUteisAteFim(parseDateOnly(valores.data_fim_acabamento_manual), diasAcabamento);
+        valores.data_inicio_acabamento_manual = datas[0] || "";
+      }
+
+      if (
+        !valores.data_inicio_acabamento_manual &&
+        !valores.data_fim_acabamento_manual &&
+        valores.data_inicio_montagem_manual
+      ) {
+        const fimAcabamentoAntesMontagem = diaUtilAnterior(parseDateOnly(valores.data_inicio_montagem_manual));
+        const datas = subtrairDiasUteisAteFim(fimAcabamentoAntesMontagem, diasAcabamento);
+        valores.data_inicio_acabamento_manual = datas[0] || "";
+        valores.data_fim_acabamento_manual = datas[datas.length - 1] || "";
+      }
+
+      if (valores.data_inicio_acabamento_manual && !valores.data_fim_acabamento_manual) {
+        const datas = adicionarDiasUteis(parseDateOnly(valores.data_inicio_acabamento_manual), diasAcabamento);
+        valores.data_fim_acabamento_manual = datas[datas.length - 1] || "";
+      }
+    }
+
+    return valores;
+  }
+
   async function guardarDatasManuais(processo: ProcessoCalendario) {
     try {
       setProcessoAGuardarDatas(processo.id);
       setMensagem("");
 
-      const valores = datasManuaisEdit[processo.id];
+      const valoresOriginais = datasManuaisEdit[processo.id];
+      const valores = normalizarDatasAntesDeGuardar(processo, valoresOriginais);
 
       const payload = {
         data_inicio_producao_manual: valores?.data_inicio_producao_manual || null,
@@ -1110,30 +1092,11 @@ export default function AdminCalendarioPage() {
       }
 
       if (
-        payload.data_fim_producao_manual &&
-        payload.data_inicio_acabamento_manual &&
-        payload.data_inicio_acabamento_manual <= payload.data_fim_producao_manual
-      ) {
-        setMensagem("Os acabamentos têm de começar depois da produção terminar.");
-        return;
-      }
-
-      if (
         payload.data_fim_acabamento_manual &&
         payload.data_inicio_montagem_manual &&
         payload.data_inicio_montagem_manual <= payload.data_fim_acabamento_manual
       ) {
         setMensagem("A montagem tem de começar depois dos acabamentos terminarem.");
-        return;
-      }
-
-      if (
-        !payload.data_fim_acabamento_manual &&
-        payload.data_fim_producao_manual &&
-        payload.data_inicio_montagem_manual &&
-        payload.data_inicio_montagem_manual <= payload.data_fim_producao_manual
-      ) {
-        setMensagem("A montagem tem de começar depois da produção terminar.");
         return;
       }
 
@@ -1155,6 +1118,7 @@ export default function AdminCalendarioPage() {
       const { error } = await supabase.from("processos").update(payloadFinal).eq("id", processo.id);
       if (error) throw error;
 
+      setDatasManuaisEdit((prev) => ({ ...prev, [processo.id]: valores }));
       setProcessos((prev) =>
         prev.map((item) => (item.id === processo.id ? { ...item, ...payloadFinal } : item))
       );
@@ -1242,7 +1206,6 @@ export default function AdminCalendarioPage() {
 
       const diasFabrico = Number(processo.dias_fabrico_previstos || 0);
       const diasMontagem = Number(processo.dias_montagem_previstos || 0);
-
       const diasTotais =
         diasFabrico + diasAcabamento + diasMontagem > 0
           ? diasFabrico + diasAcabamento + diasMontagem
@@ -1265,19 +1228,33 @@ export default function AdminCalendarioPage() {
       const payload = {
         dias_acabamento_previstos: diasAcabamento,
         dias_totais_previstos: diasTotais,
+        data_inicio_acabamento_manual:
+          planeamentoAtualizado?.inicioAcabamento || processo.data_inicio_acabamento_manual,
+        data_fim_acabamento_manual:
+          planeamentoAtualizado?.fimAcabamento || processo.data_fim_acabamento_manual,
         data_entrega_prevista:
           planeamentoAtualizado?.dataEntregaCalculada || processo.data_entrega_prevista,
       };
 
       const { error } = await supabase.from("processos").update(payload).eq("id", processo.id);
-
       if (error) throw error;
+
+      setDatasManuaisEdit((prev) => ({
+        ...prev,
+        [processo.id]: {
+          ...prev[processo.id],
+          data_inicio_acabamento_manual:
+            planeamentoAtualizado?.inicioAcabamento || prev[processo.id]?.data_inicio_acabamento_manual || "",
+          data_fim_acabamento_manual:
+            planeamentoAtualizado?.fimAcabamento || prev[processo.id]?.data_fim_acabamento_manual || "",
+        },
+      }));
 
       setProcessos((prev) =>
         prev.map((item) => (item.id === processo.id ? { ...item, ...payload } : item))
       );
 
-      setMensagem("Dias de acabamento guardados e entrega recalculada.");
+      setMensagem("Dias de acabamento guardados e datas ajustadas sem mexer na produção.");
     } catch (error: any) {
       console.error(error);
       setMensagem(error?.message || "Erro ao guardar dias de acabamento.");
@@ -1388,14 +1365,10 @@ export default function AdminCalendarioPage() {
     try {
       setAGuardarBloqueio(true);
       setMensagem("");
-
       const data = formatarDataISO(diaSelecionado);
 
       const { error } = await supabase.from("bloqueios_calendario").upsert(
-        {
-          data,
-          motivo: DESBLOQUEIO_FIM_SEMANA,
-        },
+        { data, motivo: DESBLOQUEIO_FIM_SEMANA },
         { onConflict: "data" }
       );
 
@@ -1418,7 +1391,6 @@ export default function AdminCalendarioPage() {
     try {
       setARemoverBloqueio(true);
       setMensagem("");
-
       const data = formatarDataISO(diaSelecionado);
 
       const { error } = await supabase
@@ -1446,14 +1418,10 @@ export default function AdminCalendarioPage() {
     try {
       setAGuardarBloqueio(true);
       setMensagem("");
-
       const data = formatarDataISO(diaSelecionado);
 
       const { error } = await supabase.from("bloqueios_calendario").upsert(
-        {
-          data,
-          motivo: motivoBloqueio.trim() || "Dia bloqueado manualmente",
-        },
+        { data, motivo: motivoBloqueio.trim() || "Dia bloqueado manualmente" },
         { onConflict: "data" }
       );
 
@@ -1476,9 +1444,7 @@ export default function AdminCalendarioPage() {
     try {
       setARemoverBloqueio(true);
       setMensagem("");
-
       const data = formatarDataISO(diaSelecionado);
-
       const { error } = await supabase.from("bloqueios_calendario").delete().eq("data", data);
 
       if (error) throw new Error(error.message || "Erro ao remover bloqueio.");
@@ -1510,7 +1476,6 @@ export default function AdminCalendarioPage() {
       const ano = mesAtual.getFullYear();
       const mesNumero = mesAtual.getMonth() + 1;
       const mesIndex = mesAtual.getMonth();
-
       const diasUteisMes = contarDiasUteisMes(ano, mesIndex);
 
       const { error } = await supabase.from("metas_faturacao").upsert(
@@ -1541,7 +1506,6 @@ export default function AdminCalendarioPage() {
   const diasFinanceirosDiaSelecionado = diaSelecionado ? obterDiasFinanceirosDoDia(diaSelecionado) : 0;
   const diaSelecionadoFimSemana = diaSelecionado ? eFimDeSemana(diaSelecionado) : false;
   const diaSelecionadoFimSemanaDesbloqueado = eDesbloqueioFimSemana(bloqueioDiaSelecionado);
-
   const estilos = obterEstilosResponsivos(eDesktop, eTablet);
 
   if (aVerificar) {
@@ -1579,9 +1543,7 @@ export default function AdminCalendarioPage() {
         <div style={estilos.heroCardStyle}>
           <div>
             <div style={estilos.heroEyebrowStyle}>Planeamento</div>
-            <h1 style={{ fontSize: eDesktop ? "40px" : "28px", margin: "6px 0 0 0" }}>
-              Calendário
-            </h1>
+            <h1 style={{ fontSize: eDesktop ? "40px" : "28px", margin: "6px 0 0 0" }}>Calendário</h1>
             <p style={estilos.heroTextStyle}>
               Produção, acabamentos, montagens, responsáveis, datas manuais, arquivo e alertas num só painel.
             </p>
@@ -1595,73 +1557,27 @@ export default function AdminCalendarioPage() {
         </div>
 
         <div style={estilos.tabsStyle}>
-          <button
-            type="button"
-            onClick={() => setTipoCalendario("producao")}
-            style={{
-              ...estilos.tabStyle,
-              ...(tipoCalendario === "producao" ? estilos.tabAtivaStyle : {}),
-            }}
-          >
-            Produção
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTipoCalendario("acabamentos")}
-            style={{
-              ...estilos.tabStyle,
-              ...(tipoCalendario === "acabamentos" ? estilos.tabAtivaStyle : {}),
-            }}
-          >
-            Acabamentos
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTipoCalendario("montagens")}
-            style={{
-              ...estilos.tabStyle,
-              ...(tipoCalendario === "montagens" ? estilos.tabAtivaStyle : {}),
-            }}
-          >
-            Montagens
-          </button>
+          <button type="button" onClick={() => setTipoCalendario("producao")} style={{ ...estilos.tabStyle, ...(tipoCalendario === "producao" ? estilos.tabAtivaStyle : {}) }}>Produção</button>
+          <button type="button" onClick={() => setTipoCalendario("acabamentos")} style={{ ...estilos.tabStyle, ...(tipoCalendario === "acabamentos" ? estilos.tabAtivaStyle : {}) }}>Acabamentos</button>
+          <button type="button" onClick={() => setTipoCalendario("montagens")} style={{ ...estilos.tabStyle, ...(tipoCalendario === "montagens" ? estilos.tabAtivaStyle : {}) }}>Montagens</button>
         </div>
 
         <div style={estilos.mesAtualStyle}>{formatarMesAno(mesAtual)}</div>
 
         <div style={estilos.filtrosWrapStyle}>
-          <input
-            value={pesquisa}
-            onChange={(e) => setPesquisa(e.target.value)}
-            placeholder="Pesquisar obra, cliente ou VAL"
-            style={estilos.inputFiltroStyle}
-          />
+          <input value={pesquisa} onChange={(e) => setPesquisa(e.target.value)} placeholder="Pesquisar obra, cliente ou VAL" style={estilos.inputFiltroStyle} />
 
-          <select
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value as (typeof ESTADOS_DISPONIVEIS)[number])}
-            style={estilos.selectFiltroStyle}
-          >
-            {ESTADOS_DISPONIVEIS.map((estado) => (
-              <option key={estado} value={estado} style={{ color: "black" }}>{estado}</option>
-            ))}
+          <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as (typeof ESTADOS_DISPONIVEIS)[number])} style={estilos.selectFiltroStyle}>
+            {ESTADOS_DISPONIVEIS.map((estado) => <option key={estado} value={estado} style={{ color: "black" }}>{estado}</option>)}
           </select>
 
-          <select
-            value={filtroArquivo}
-            onChange={(e) => setFiltroArquivo(e.target.value as FiltroArquivo)}
-            style={estilos.selectFiltroStyle}
-          >
+          <select value={filtroArquivo} onChange={(e) => setFiltroArquivo(e.target.value as FiltroArquivo)} style={estilos.selectFiltroStyle}>
             <option value="ativas" style={{ color: "black" }}>Ativas</option>
             <option value="arquivadas" style={{ color: "black" }}>Arquivadas</option>
             <option value="todas" style={{ color: "black" }}>Todas</option>
           </select>
 
-          <button type="button" onClick={limparFiltros} style={estilos.botaoLimparStyle}>
-            Limpar filtros
-          </button>
+          <button type="button" onClick={limparFiltros} style={estilos.botaoLimparStyle}>Limpar filtros</button>
         </div>
 
         <div style={estilos.cardStyle}>
@@ -1670,33 +1586,21 @@ export default function AdminCalendarioPage() {
           <div style={estilos.metaEditorWrapStyle}>
             <div style={estilos.metaEditorCampoStyle}>
               <label style={estilos.labelStyle}>Meta mensal desejada</label>
-              <input
-                value={metaMensalEdit}
-                onChange={(e) => setMetaMensalEdit(e.target.value)}
-                placeholder="Ex: 120000"
-                style={estilos.inputFiltroStyle}
-              />
+              <input value={metaMensalEdit} onChange={(e) => setMetaMensalEdit(e.target.value)} placeholder="Ex: 120000" style={estilos.inputFiltroStyle} />
             </div>
 
             <div style={estilos.metaInfoCardStyle}>
               <div style={estilos.metaInfoTituloStyle}>Meta anual automática</div>
-              <div style={estilos.metaInfoValorStyle}>
-                {((Number(metaMensalEdit.replace(",", ".")) || 0) * 12).toFixed(2)} €
-              </div>
+              <div style={estilos.metaInfoValorStyle}>{((Number(metaMensalEdit.replace(",", ".")) || 0) * 12).toFixed(2)} €</div>
             </div>
 
-            <button
-              type="button"
-              onClick={guardarMetaMensal}
-              style={estilos.botaoPrincipalStyle}
-              disabled={aGuardarMeta}
-            >
+            <button type="button" onClick={guardarMetaMensal} style={estilos.botaoPrincipalStyle} disabled={aGuardarMeta}>
               {aGuardarMeta ? "A guardar..." : "Guardar Meta"}
             </button>
           </div>
 
           <div style={estilos.metaAjudaStyle}>
-            A produção agora enche os dias até à meta diária. Exemplo: se a meta for 5077 € e uma obra valer 7500 €, o primeiro dia reserva 5077 € e o restante vai para o próximo dia disponível, podendo ser completado por outra obra.
+            A produção enche os dias até à meta diária. Ao definires montagem ou fim de acabamento e dias de acabamento, os acabamentos são calculados para trás sem mexer na produção.
           </div>
         </div>
 
@@ -1709,51 +1613,22 @@ export default function AdminCalendarioPage() {
         ) : (
           <>
             <div style={estilos.resumoGridStyle}>
-              <div style={estilos.resumoCardStyle}>
-                <div style={estilos.resumoNumeroStyle}>{resumo.objetivoMensal.toFixed(2)} €</div>
-                <div>Meta mensal</div>
-              </div>
-
-              <div style={estilos.resumoCardStyle}>
-                <div style={estilos.resumoNumeroStyle}>{resumo.objetivoDiario.toFixed(2)} €</div>
-                <div>Objetivo diário produção</div>
-              </div>
-
-              <div style={estilos.resumoCardStyle}>
-                <div style={estilos.resumoNumeroStyle}>{resumo.totalAtivos}</div>
-                <div>Obras ativas</div>
-              </div>
-
-              <div style={estilos.resumoCardStyle}>
-                <div style={estilos.resumoNumeroStyle}>{resumo.totalArquivados}</div>
-                <div>Obras arquivadas</div>
-              </div>
-
-              <div style={estilos.resumoCardStyle}>
-                <div style={estilos.resumoNumeroStyle}>{resumo.diasUteisReaisAno}</div>
-                <div>Dias úteis reais do ano</div>
-              </div>
+              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.objetivoMensal.toFixed(2)} €</div><div>Meta mensal</div></div>
+              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.objetivoDiario.toFixed(2)} €</div><div>Objetivo diário produção</div></div>
+              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.totalAtivos}</div><div>Obras ativas</div></div>
+              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.totalArquivados}</div><div>Obras arquivadas</div></div>
+              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.diasUteisReaisAno}</div><div>Dias úteis reais do ano</div></div>
             </div>
 
             {alertas.length > 0 && (
               <div style={estilos.cardStyle}>
                 <h2 style={{ marginTop: 0 }}>Alertas dos próximos 10 dias</h2>
-
                 <div style={estilos.alertasGridStyle}>
                   {alertas.slice(0, 8).map((alerta) => (
-                    <div
-                      key={alerta.id}
-                      style={{
-                        ...estilos.alertaCardStyle,
-                        ...obterEstiloAlerta(alerta.nivel),
-                      }}
-                    >
+                    <div key={alerta.id} style={{ ...estilos.alertaCardStyle, ...obterEstiloAlerta(alerta.nivel) }}>
                       <div style={estilos.alertaTituloStyle}>{alerta.titulo}</div>
                       <div style={estilos.alertaTextoStyle}>{alerta.texto}</div>
-                      <div style={estilos.alertaDataStyle}>
-                        {formatarData(alerta.data)} ·{" "}
-                        {alerta.diasAte === 0 ? "hoje" : `em ${alerta.diasAte} dias`}
-                      </div>
+                      <div style={estilos.alertaDataStyle}>{formatarData(alerta.data)} · {alerta.diasAte === 0 ? "hoje" : `em ${alerta.diasAte} dias`}</div>
                     </div>
                   ))}
                 </div>
@@ -1765,37 +1640,19 @@ export default function AdminCalendarioPage() {
                 <div style={estilos.tituloComAcoesStyle}>
                   <div>
                     <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
-                      {tipoCalendario === "acabamentos"
-                        ? "Linha temporal de acabamentos"
-                        : "Linha temporal de montagens"}
+                      {tipoCalendario === "acabamentos" ? "Linha temporal de acabamentos" : "Linha temporal de montagens"}
                     </h2>
-                    <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
-                      Os cartões começam minimizados. Abre apenas a obra que queres editar.
-                    </p>
+                    <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>Os cartões começam minimizados. Abre apenas a obra que queres editar.</p>
                   </div>
 
                   <div style={estilos.acoesInlineStyle}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const todosAbertos: Record<string, boolean> = {};
-                        planeamentosVisiveis.forEach((item) => {
-                          todosAbertos[item.processo.id] = true;
-                        });
-                        setCartoesAbertos(todosAbertos);
-                      }}
-                      style={estilos.botaoSecundarioStyle}
-                    >
-                      Abrir todos
-                    </button>
+                    <button type="button" onClick={() => {
+                      const todosAbertos: Record<string, boolean> = {};
+                      planeamentosVisiveis.forEach((item) => { todosAbertos[item.processo.id] = true; });
+                      setCartoesAbertos(todosAbertos);
+                    }} style={estilos.botaoSecundarioStyle}>Abrir todos</button>
 
-                    <button
-                      type="button"
-                      onClick={() => setCartoesAbertos({})}
-                      style={estilos.botaoSecundarioStyle}
-                    >
-                      Minimizar todos
-                    </button>
+                    <button type="button" onClick={() => setCartoesAbertos({})} style={estilos.botaoSecundarioStyle}>Minimizar todos</button>
                   </div>
                 </div>
 
@@ -1808,92 +1665,49 @@ export default function AdminCalendarioPage() {
                       const estaArquivado = item.processo.calendario_arquivado === true;
 
                       return (
-                        <div
-                          key={item.processo.id}
-                          style={{
-                            ...estilos.timelineCardStyle,
-                            opacity: estaArquivado ? 0.65 : 1,
-                          }}
-                        >
+                        <div key={item.processo.id} style={{ ...estilos.timelineCardStyle, opacity: estaArquivado ? 0.65 : 1 }}>
                           <div style={estilos.cabecalhoCartaoStyle}>
-                            <button
-                              type="button"
-                              onClick={() => alternarCartao(item.processo.id)}
-                              style={estilos.botaoHeaderCartaoStyle}
-                            >
+                            <button type="button" onClick={() => alternarCartao(item.processo.id)} style={estilos.botaoHeaderCartaoStyle}>
                               <div style={{ minWidth: 0 }}>
                                 <div style={estilos.timelineTituloStyle}>
                                   {estaAberto ? "▾" : "▸"} {item.processo.codigo_val || "Sem VAL"} · {item.processo.nome_obra || "Sem nome"}
                                 </div>
-                                <div style={estilos.subtextoStyle}>
-                                  Cliente: {item.processo.nome_cliente || "—"}
-                                </div>
+                                <div style={estilos.subtextoStyle}>Cliente: {item.processo.nome_cliente || "—"}</div>
                               </div>
                             </button>
 
                             <div style={estilos.badgesWrapStyle}>
-                              {item.temDatasManuais && (
-                                <div style={estilos.manualBadgeStyle}>Datas manuais</div>
-                              )}
-                              {estaArquivado && (
-                                <div style={estilos.arquivadoBadgeStyle}>Arquivada</div>
-                              )}
+                              {item.temDatasManuais && <div style={estilos.manualBadgeStyle}>Datas manuais</div>}
+                              {estaArquivado && <div style={estilos.arquivadoBadgeStyle}>Arquivada</div>}
                               <div style={estilos.timelineBadgeStyle}>
-                                {tipoCalendario === "acabamentos"
-                                  ? `${item.datasAcabamento.length} dias acab.`
-                                  : `${item.datasMontagem.length} dias montagem`}
+                                {tipoCalendario === "acabamentos" ? `${item.datasAcabamento.length} dias acab.` : `${item.datasMontagem.length} dias montagem`}
                               </div>
                             </div>
                           </div>
 
                           <div style={estilos.timelineDatasStyle}>
-                            <span>
-                              Prod.: {formatarData(item.inicioProducao)} →{" "}
-                              {formatarData(item.fimProducao)}
-                            </span>
-                            <span>
-                              Acab.: {formatarData(item.inicioAcabamento)} →{" "}
-                              {formatarData(item.fimAcabamento)}
-                            </span>
-                            <span>
-                              Mont.: {formatarData(item.inicioMontagem)} →{" "}
-                              {formatarData(item.fimMontagem)}
-                            </span>
+                            <span>Prod.: {formatarData(item.inicioProducao)} → {formatarData(item.fimProducao)}</span>
+                            <span>Acab.: {formatarData(item.inicioAcabamento)} → {formatarData(item.fimAcabamento)}</span>
+                            <span>Mont.: {formatarData(item.inicioMontagem)} → {formatarData(item.fimMontagem)}</span>
                             <span>Entrega: {formatarData(item.dataEntregaCalculada)}</span>
                           </div>
 
                           <div style={estilos.timelineBarraWrapStyle}>
-                            <div
-                              style={{
-                                ...estilos.timelineBarraStyle,
-                                background:
-                                  tipoCalendario === "montagens"
-                                    ? "linear-gradient(90deg, rgba(156,39,176,0.35), rgba(186,104,200,0.95))"
-                                    : "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(66,133,244,0.95))",
-                              }}
-                            />
+                            <div style={{
+                              ...estilos.timelineBarraStyle,
+                              background: tipoCalendario === "montagens"
+                                ? "linear-gradient(90deg, rgba(156,39,176,0.35), rgba(186,104,200,0.95))"
+                                : "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(66,133,244,0.95))",
+                            }} />
                           </div>
 
                           <div style={estilos.acoesInlineStyle}>
-                            <button
-                              type="button"
-                              onClick={() => alternarCartao(item.processo.id)}
-                              style={estilos.botaoSecundarioStyle}
-                            >
+                            <button type="button" onClick={() => alternarCartao(item.processo.id)} style={estilos.botaoSecundarioStyle}>
                               {estaAberto ? "Minimizar" : "Abrir detalhes"}
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => arquivarOuRestaurarProcesso(item.processo, !estaArquivado)}
-                              disabled={processoAArquivar === item.processo.id}
-                              style={estaArquivado ? estilos.botaoPrincipalStyle : estilos.botaoRemoverStyle}
-                            >
-                              {processoAArquivar === item.processo.id
-                                ? "A guardar..."
-                                : estaArquivado
-                                ? "Restaurar obra"
-                                : "Arquivar obra"}
+                            <button type="button" onClick={() => arquivarOuRestaurarProcesso(item.processo, !estaArquivado)} disabled={processoAArquivar === item.processo.id} style={estaArquivado ? estilos.botaoPrincipalStyle : estilos.botaoRemoverStyle}>
+                              {processoAArquivar === item.processo.id ? "A guardar..." : estaArquivado ? "Restaurar obra" : "Arquivar obra"}
                             </button>
                           </div>
 
@@ -1903,133 +1717,22 @@ export default function AdminCalendarioPage() {
                                 <strong>Responsáveis e emails</strong>
 
                                 <div style={estilos.formGridStyle}>
-                                  <input
-                                    value={contactosEdit[item.processo.id]?.responsavel_obra_nome || ""}
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_obra_nome: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Nome responsável obra"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-
-                                  <input
-                                    value={contactosEdit[item.processo.id]?.responsavel_obra_email || ""}
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_obra_email: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email responsável obra"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-
-                                  <input
-                                    value={contactosEdit[item.processo.id]?.responsavel_acabamentos_nome || ""}
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_acabamentos_nome: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Nome responsável acabamentos"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-
-                                  <input
-                                    value={contactosEdit[item.processo.id]?.responsavel_acabamentos_email || ""}
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_acabamentos_email: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email responsável acabamentos"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-
-                                  <input
-                                    value={contactosEdit[item.processo.id]?.responsavel_montagem_nome || ""}
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_montagem_nome: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Nome responsável montagem"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-
-                                  <input
-                                    value={contactosEdit[item.processo.id]?.responsavel_montagem_email || ""}
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_montagem_email: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email responsável montagem"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-
-                                  <input
-                                    value={contactosEdit[item.processo.id]?.admin_alerta_email || ""}
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          admin_alerta_email: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email admin em cópia"
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input value={contactosEdit[item.processo.id]?.responsavel_obra_nome || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_obra_nome: e.target.value } }))} placeholder="Nome responsável obra" style={estilos.inputFiltroStyle} />
+                                  <input value={contactosEdit[item.processo.id]?.responsavel_obra_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_obra_email: e.target.value } }))} placeholder="Email responsável obra" style={estilos.inputFiltroStyle} />
+                                  <input value={contactosEdit[item.processo.id]?.responsavel_acabamentos_nome || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_acabamentos_nome: e.target.value } }))} placeholder="Nome responsável acabamentos" style={estilos.inputFiltroStyle} />
+                                  <input value={contactosEdit[item.processo.id]?.responsavel_acabamentos_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_acabamentos_email: e.target.value } }))} placeholder="Email responsável acabamentos" style={estilos.inputFiltroStyle} />
+                                  <input value={contactosEdit[item.processo.id]?.responsavel_montagem_nome || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_montagem_nome: e.target.value } }))} placeholder="Nome responsável montagem" style={estilos.inputFiltroStyle} />
+                                  <input value={contactosEdit[item.processo.id]?.responsavel_montagem_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_montagem_email: e.target.value } }))} placeholder="Email responsável montagem" style={estilos.inputFiltroStyle} />
+                                  <input value={contactosEdit[item.processo.id]?.admin_alerta_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], admin_alerta_email: e.target.value } }))} placeholder="Email admin em cópia" style={estilos.inputFiltroStyle} />
                                 </div>
 
                                 <div style={estilos.acoesInlineStyle}>
-                                  <button
-                                    type="button"
-                                    onClick={() => guardarContactos(item.processo)}
-                                    disabled={processoAGuardarContactos === item.processo.id}
-                                    style={estilos.botaoPrincipalStyle}
-                                  >
-                                    {processoAGuardarContactos === item.processo.id
-                                      ? "A guardar..."
-                                      : "Guardar emails"}
+                                  <button type="button" onClick={() => guardarContactos(item.processo)} disabled={processoAGuardarContactos === item.processo.id} style={estilos.botaoPrincipalStyle}>
+                                    {processoAGuardarContactos === item.processo.id ? "A guardar..." : "Guardar emails"}
                                   </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => enviarAlertasEmail(item.processo)}
-                                    disabled={processoAEnviarEmail === item.processo.id}
-                                    style={estilos.botaoSecundarioStyle}
-                                  >
-                                    {processoAEnviarEmail === item.processo.id
-                                      ? "A enviar..."
-                                      : "Enviar alerta"}
+                                  <button type="button" onClick={() => enviarAlertasEmail(item.processo)} disabled={processoAEnviarEmail === item.processo.id} style={estilos.botaoSecundarioStyle}>
+                                    {processoAEnviarEmail === item.processo.id ? "A enviar..." : "Enviar alerta"}
                                   </button>
                                 </div>
                               </div>
@@ -2039,122 +1742,36 @@ export default function AdminCalendarioPage() {
 
                                 <div style={estilos.formGridStyle}>
                                   <label style={estilos.smallLabelStyle}>Início produção</label>
-                                  <input
-                                    type="date"
-                                    value={datasManuaisEdit[item.processo.id]?.data_inicio_producao_manual || ""}
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_inicio_producao_manual: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input type="date" value={datasManuaisEdit[item.processo.id]?.data_inicio_producao_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_inicio_producao_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
 
                                   <label style={estilos.smallLabelStyle}>Fim produção</label>
-                                  <input
-                                    type="date"
-                                    value={datasManuaisEdit[item.processo.id]?.data_fim_producao_manual || ""}
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_fim_producao_manual: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input type="date" value={datasManuaisEdit[item.processo.id]?.data_fim_producao_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_fim_producao_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
 
                                   <label style={estilos.smallLabelStyle}>Início acabamentos</label>
-                                  <input
-                                    type="date"
-                                    value={datasManuaisEdit[item.processo.id]?.data_inicio_acabamento_manual || ""}
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_inicio_acabamento_manual: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input type="date" value={datasManuaisEdit[item.processo.id]?.data_inicio_acabamento_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_inicio_acabamento_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
 
                                   <label style={estilos.smallLabelStyle}>Fim acabamentos</label>
-                                  <input
-                                    type="date"
-                                    value={datasManuaisEdit[item.processo.id]?.data_fim_acabamento_manual || ""}
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_fim_acabamento_manual: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input type="date" value={datasManuaisEdit[item.processo.id]?.data_fim_acabamento_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_fim_acabamento_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
 
                                   <label style={estilos.smallLabelStyle}>Início montagem</label>
-                                  <input
-                                    type="date"
-                                    value={datasManuaisEdit[item.processo.id]?.data_inicio_montagem_manual || ""}
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_inicio_montagem_manual: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input type="date" value={datasManuaisEdit[item.processo.id]?.data_inicio_montagem_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_inicio_montagem_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
 
                                   <label style={estilos.smallLabelStyle}>Fim montagem</label>
-                                  <input
-                                    type="date"
-                                    value={datasManuaisEdit[item.processo.id]?.data_fim_montagem_manual || ""}
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_fim_montagem_manual: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input type="date" value={datasManuaisEdit[item.processo.id]?.data_fim_montagem_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_fim_montagem_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
                                 </div>
 
                                 <div style={estilos.acoesInlineStyle}>
-                                  <button
-                                    type="button"
-                                    onClick={() => guardarDatasManuais(item.processo)}
-                                    disabled={processoAGuardarDatas === item.processo.id}
-                                    style={estilos.botaoPrincipalStyle}
-                                  >
-                                    {processoAGuardarDatas === item.processo.id
-                                      ? "A guardar..."
-                                      : "Guardar datas"}
+                                  <button type="button" onClick={() => guardarDatasManuais(item.processo)} disabled={processoAGuardarDatas === item.processo.id} style={estilos.botaoPrincipalStyle}>
+                                    {processoAGuardarDatas === item.processo.id ? "A guardar..." : "Guardar datas"}
                                   </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => limparDatasManuais(item.processo)}
-                                    disabled={processoAGuardarDatas === item.processo.id}
-                                    style={estilos.botaoRemoverStyle}
-                                  >
+                                  <button type="button" onClick={() => limparDatasManuais(item.processo)} disabled={processoAGuardarDatas === item.processo.id} style={estilos.botaoRemoverStyle}>
                                     Limpar datas
                                   </button>
+                                </div>
+
+                                <div style={estilos.metaAjudaStyle}>
+                                  Se colocares só fim de acabamento e dias de acabamento, o início é calculado para trás. Se colocares montagem e dias de acabamento, os acabamentos ficam antes da montagem. A produção não muda.
                                 </div>
                               </div>
 
@@ -2162,35 +1779,15 @@ export default function AdminCalendarioPage() {
                                 <strong>Ajustar dias de acabamento</strong>
 
                                 <div style={estilos.editarAcabamentoGridStyle}>
-                                  <input
-                                    value={diasAcabamentoEdit[item.processo.id] || ""}
-                                    onChange={(e) =>
-                                      setDiasAcabamentoEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: e.target.value,
-                                      }))
-                                    }
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    placeholder="Ex: 7"
-                                    style={estilos.inputFiltroStyle}
-                                  />
+                                  <input value={diasAcabamentoEdit[item.processo.id] || ""} onChange={(e) => setDiasAcabamentoEdit((prev) => ({ ...prev, [item.processo.id]: e.target.value }))} type="number" min="0" step="1" placeholder="Ex: 7" style={estilos.inputFiltroStyle} />
 
-                                  <button
-                                    type="button"
-                                    onClick={() => guardarDiasAcabamento(item.processo)}
-                                    disabled={processoAGuardarAcabamento === item.processo.id}
-                                    style={estilos.botaoPrincipalStyle}
-                                  >
-                                    {processoAGuardarAcabamento === item.processo.id
-                                      ? "A guardar..."
-                                      : "Guardar"}
+                                  <button type="button" onClick={() => guardarDiasAcabamento(item.processo)} disabled={processoAGuardarAcabamento === item.processo.id} style={estilos.botaoPrincipalStyle}>
+                                    {processoAGuardarAcabamento === item.processo.id ? "A guardar..." : "Guardar"}
                                   </button>
                                 </div>
 
                                 <div style={estilos.metaAjudaStyle}>
-                                  Se a obra não leva acabamento, mete 0 dias. Depois reserva a montagem nas datas manuais.
+                                  Se já existir fim de acabamento ou montagem, os dias são ajustados para trás sem mexer na produção.
                                 </div>
                               </div>
                             </div>
@@ -2206,9 +1803,7 @@ export default function AdminCalendarioPage() {
             <div style={estilos.calendarCardStyle}>
               <div style={estilos.diasSemanaHeaderStyle}>
                 {nomesDias.map((dia, index) => (
-                  <div key={`${dia}-${index}`} style={estilos.diaSemanaHeaderItemStyle}>
-                    {dia}
-                  </div>
+                  <div key={`${dia}-${index}`} style={estilos.diaSemanaHeaderItemStyle}>{dia}</div>
                 ))}
               </div>
 
@@ -2223,87 +1818,42 @@ export default function AdminCalendarioPage() {
                   const estiloFinanceiro = obterEstiloFinanceiroDia(valorDia, resumo.objetivoDiario);
                   const limiteEventos = tipoCalendario === "producao" ? (eDesktop ? 3 : 2) : 1;
                   const fimSemana = eFimDeSemana(dia.data);
-                  const bloqueadoVisual =
-                    eBloqueioManual(dia.data) || (fimSemana && !desbloqueadoFimSemana);
+                  const bloqueadoVisual = eBloqueioManual(dia.data) || (fimSemana && !desbloqueadoFimSemana);
 
                   return (
-                    <button
-                      key={dia.chave}
-                      type="button"
-                      onClick={() => abrirModalBloqueio(dia.data)}
-                      style={{
-                        ...estilos.diaMesCardStyle,
-                        opacity: dia.pertenceAoMesAtual ? 1 : 0.42,
-                        border: hoje
-                          ? "1px solid rgba(66,133,244,0.95)"
-                          : "1px solid rgba(255,255,255,0.06)",
-                        background: bloqueadoVisual
-                          ? "rgba(160,82,45,0.13)"
-                          : fimSemana && desbloqueadoFimSemana
-                          ? "rgba(52,168,83,0.08)"
-                          : "rgba(255,255,255,0.01)",
-                        boxShadow: hoje
-                          ? "inset 0 0 0 1px rgba(66,133,244,0.4)"
-                          : "none",
-                      }}
-                    >
+                    <button key={dia.chave} type="button" onClick={() => abrirModalBloqueio(dia.data)} style={{
+                      ...estilos.diaMesCardStyle,
+                      opacity: dia.pertenceAoMesAtual ? 1 : 0.42,
+                      border: hoje ? "1px solid rgba(66,133,244,0.95)" : "1px solid rgba(255,255,255,0.06)",
+                      background: bloqueadoVisual
+                        ? "rgba(160,82,45,0.13)"
+                        : fimSemana && desbloqueadoFimSemana
+                        ? "rgba(52,168,83,0.08)"
+                        : "rgba(255,255,255,0.01)",
+                      boxShadow: hoje ? "inset 0 0 0 1px rgba(66,133,244,0.4)" : "none",
+                    }}>
                       <div style={estilos.topoDiaStyle}>
-                        <div
-                          style={{
-                            ...estilos.numeroDiaStyle,
-                            background: hoje ? "rgba(66,133,244,0.95)" : "transparent",
-                            color: hoje ? "white" : "inherit",
-                          }}
-                        >
+                        <div style={{ ...estilos.numeroDiaStyle, background: hoje ? "rgba(66,133,244,0.95)" : "transparent", color: hoje ? "white" : "inherit" }}>
                           {dia.dia}
                         </div>
 
-                        <div
-                          style={{
-                            ...estilos.financeBadgeStyle,
-                            background: estiloFinanceiro.fundo,
-                            border: `1px solid ${estiloFinanceiro.borda}`,
-                            color: estiloFinanceiro.texto,
-                          }}
-                        >
-                          {tipoCalendario === "producao"
-                            ? `${valorDia.toFixed(0)} €`
-                            : tipoCalendario === "acabamentos"
-                            ? `${processosDoDia.length} acab.`
-                            : `${processosDoDia.length} mont.`}
+                        <div style={{ ...estilos.financeBadgeStyle, background: estiloFinanceiro.fundo, border: `1px solid ${estiloFinanceiro.borda}`, color: estiloFinanceiro.texto }}>
+                          {tipoCalendario === "producao" ? `${valorDia.toFixed(0)} €` : tipoCalendario === "acabamentos" ? `${processosDoDia.length} acab.` : `${processosDoDia.length} mont.`}
                         </div>
                       </div>
 
                       <div style={estilos.eventosDiaStyle}>
                         {bloqueadoVisual && (
-                          <div
-                            style={{
-                              ...estilos.eventoStyle,
-                              background: "rgba(160,82,45,0.90)",
-                              border: "1px solid rgba(160,82,45,1)",
-                            }}
-                          >
-                            {fimSemana && !eBloqueioManual(dia.data)
-                              ? "Fim semana"
-                              : "Bloqueado"}
+                          <div style={{ ...estilos.eventoStyle, background: "rgba(160,82,45,0.90)", border: "1px solid rgba(160,82,45,1)" }}>
+                            {fimSemana && !eBloqueioManual(dia.data) ? "Fim semana" : "Bloqueado"}
                           </div>
                         )}
 
                         {fimSemana && desbloqueadoFimSemana && (
-                          <div
-                            style={{
-                              ...estilos.eventoStyle,
-                              background: "rgba(52,168,83,0.70)",
-                              border: "1px solid rgba(52,168,83,1)",
-                            }}
-                          >
-                            Desbloqueado
-                          </div>
+                          <div style={{ ...estilos.eventoStyle, background: "rgba(52,168,83,0.70)", border: "1px solid rgba(52,168,83,1)" }}>Desbloqueado</div>
                         )}
 
-                        {processosDoDia.length === 0 &&
-                        !bloqueadoVisual &&
-                        !desbloqueadoFimSemana ? (
+                        {processosDoDia.length === 0 && !bloqueadoVisual && !desbloqueadoFimSemana ? (
                           <div style={estilos.diaVazioStyle}>—</div>
                         ) : (
                           processosDoDia.slice(0, limiteEventos).map((processo) => {
@@ -2312,17 +1862,7 @@ export default function AdminCalendarioPage() {
                             const valorProcessoDia = obterValorProducaoDoProcessoNoDia(processo.id, dia.data);
 
                             return (
-                              <div
-                                key={`${dia.chave}-${processo.id}`}
-                                title={`${processo.codigo_val || "Sem VAL"} | ${
-                                  processo.nome_obra || "Obra"
-                                } | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`}
-                                style={{
-                                  ...estilos.eventoStyle,
-                                  background: cores.fundo,
-                                  border: `1px solid ${cores.borda}`,
-                                }}
-                              >
+                              <div key={`${dia.chave}-${processo.id}`} title={`${processo.codigo_val || "Sem VAL"} | ${processo.nome_obra || "Obra"} | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`} style={{ ...estilos.eventoStyle, background: cores.fundo, border: `1px solid ${cores.borda}` }}>
                                 {planeamento?.temDatasManuais ? "✎ " : ""}
                                 {processo.calendario_arquivado ? "🗄 " : ""}
                                 {processo.codigo_val || "Sem VAL"} · {processo.nome_obra || processo.nome_cliente || "Sem nome"}
@@ -2332,29 +1872,13 @@ export default function AdminCalendarioPage() {
                         )}
 
                         {processosDoDia.length > limiteEventos && (
-                          <div style={estilos.maisEventosStyle}>
-                            +{processosDoDia.length - limiteEventos} mais
-                          </div>
+                          <div style={estilos.maisEventosStyle}>+{processosDoDia.length - limiteEventos} mais</div>
                         )}
                       </div>
 
-                      <div
-                        style={{
-                          ...estilos.rodapeFinanceiroDiaStyle,
-                          background: estiloFinanceiro.fundo,
-                          border: `1px solid ${estiloFinanceiro.borda}`,
-                        }}
-                      >
-                        <div style={{ color: estiloFinanceiro.texto }}>
-                          {tipoCalendario === "producao"
-                            ? `${diasFinanceirosDia.toFixed(2)} dias`
-                            : `${processosDoDia.length} obras`}
-                        </div>
-                        <div style={{ opacity: 0.8 }}>
-                          {tipoCalendario === "producao"
-                            ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €`
-                            : "Ver timeline"}
-                        </div>
+                      <div style={{ ...estilos.rodapeFinanceiroDiaStyle, background: estiloFinanceiro.fundo, border: `1px solid ${estiloFinanceiro.borda}` }}>
+                        <div style={{ color: estiloFinanceiro.texto }}>{tipoCalendario === "producao" ? `${diasFinanceirosDia.toFixed(2)} dias` : `${processosDoDia.length} obras`}</div>
+                        <div style={{ opacity: 0.8 }}>{tipoCalendario === "producao" ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €` : "Ver timeline"}</div>
                       </div>
                     </button>
                   );
@@ -2367,31 +1891,12 @@ export default function AdminCalendarioPage() {
         {diaSelecionado && (
           <div style={estilos.overlayStyle}>
             <div style={estilos.modalStyle}>
-              <h3 style={{ marginTop: 0, marginBottom: "10px" }}>
-                Dia {formatarData(formatarDataISO(diaSelecionado))}
-              </h3>
+              <h3 style={{ marginTop: 0, marginBottom: "10px" }}>Dia {formatarData(formatarDataISO(diaSelecionado))}</h3>
 
               <div style={estilos.modalResumoGridStyle}>
-                <div style={estilos.modalResumoCardStyle}>
-                  <div style={estilos.modalResumoTituloStyle}>Previsto produção</div>
-                  <div style={estilos.modalResumoValorStyle}>
-                    {valorDiaSelecionado.toFixed(2)} €
-                  </div>
-                </div>
-
-                <div style={estilos.modalResumoCardStyle}>
-                  <div style={estilos.modalResumoTituloStyle}>Dias cobertos</div>
-                  <div style={estilos.modalResumoValorStyle}>
-                    {diasFinanceirosDiaSelecionado.toFixed(2)}
-                  </div>
-                </div>
-
-                <div style={estilos.modalResumoCardStyle}>
-                  <div style={estilos.modalResumoTituloStyle}>Processos</div>
-                  <div style={estilos.modalResumoValorStyle}>
-                    {processosDiaSelecionado.length}
-                  </div>
-                </div>
+                <div style={estilos.modalResumoCardStyle}><div style={estilos.modalResumoTituloStyle}>Previsto produção</div><div style={estilos.modalResumoValorStyle}>{valorDiaSelecionado.toFixed(2)} €</div></div>
+                <div style={estilos.modalResumoCardStyle}><div style={estilos.modalResumoTituloStyle}>Dias cobertos</div><div style={estilos.modalResumoValorStyle}>{diasFinanceirosDiaSelecionado.toFixed(2)}</div></div>
+                <div style={estilos.modalResumoCardStyle}><div style={estilos.modalResumoTituloStyle}>Processos</div><div style={estilos.modalResumoValorStyle}>{processosDiaSelecionado.length}</div></div>
               </div>
 
               <p style={{ opacity: 0.8, marginTop: "16px", lineHeight: 1.4 }}>
@@ -2399,34 +1904,19 @@ export default function AdminCalendarioPage() {
               </p>
 
               {bloqueioDiaSelecionado && !diaSelecionadoFimSemanaDesbloqueado && (
-                <div style={estilos.bloqueioInfoStyle}>
-                  <strong>Bloqueio atual:</strong>{" "}
-                  {bloqueioDiaSelecionado.motivo || "Sem motivo"}
-                </div>
+                <div style={estilos.bloqueioInfoStyle}><strong>Bloqueio atual:</strong> {bloqueioDiaSelecionado.motivo || "Sem motivo"}</div>
               )}
 
               {diaSelecionadoFimSemanaDesbloqueado && (
-                <div style={estilos.desbloqueioInfoStyle}>
-                  <strong>Fim de semana desbloqueado.</strong>
-                </div>
+                <div style={estilos.desbloqueioInfoStyle}><strong>Fim de semana desbloqueado.</strong></div>
               )}
 
               <label style={estilos.labelStyle}>Motivo do bloqueio</label>
-              <textarea
-                value={motivoBloqueio}
-                onChange={(e) => setMotivoBloqueio(e.target.value)}
-                placeholder="Ex: Feriado, manutenção, equipa indisponível"
-                style={estilos.textareaStyle}
-              />
+              <textarea value={motivoBloqueio} onChange={(e) => setMotivoBloqueio(e.target.value)} placeholder="Ex: Feriado, manutenção, equipa indisponível" style={estilos.textareaStyle} />
 
               <div style={{ marginTop: "18px" }}>
                 <h4 style={{ marginTop: 0, marginBottom: "10px" }}>
-                  Processos deste dia ·{" "}
-                  {tipoCalendario === "producao"
-                    ? "Produção"
-                    : tipoCalendario === "acabamentos"
-                    ? "Acabamentos"
-                    : "Montagens"}
+                  Processos deste dia · {tipoCalendario === "producao" ? "Produção" : tipoCalendario === "acabamentos" ? "Acabamentos" : "Montagens"}
                 </h4>
 
                 {processosDiaSelecionado.length === 0 ? (
@@ -2435,68 +1925,27 @@ export default function AdminCalendarioPage() {
                   <div style={{ display: "grid", gap: "10px" }}>
                     {processosDiaSelecionado.map((processo) => {
                       const planeamento = obterPlaneamentoProcesso(processo.id);
-                      const valorProcessoDia = diaSelecionado
-                        ? obterValorProducaoDoProcessoNoDia(processo.id, diaSelecionado)
-                        : 0;
+                      const valorProcessoDia = diaSelecionado ? obterValorProducaoDoProcessoNoDia(processo.id, diaSelecionado) : 0;
 
                       return (
                         <div key={processo.id} style={estilos.processoDiaCardStyle}>
-                          <div style={{ fontWeight: "bold" }}>
-                            {processo.codigo_val || "Sem VAL"} · {processo.nome_obra || "Sem nome"}
-                          </div>
-
-                          <div style={estilos.subtextoStyle}>
-                            Cliente: {processo.nome_cliente || "—"}
-                          </div>
+                          <div style={{ fontWeight: "bold" }}>{processo.codigo_val || "Sem VAL"} · {processo.nome_obra || "Sem nome"}</div>
+                          <div style={estilos.subtextoStyle}>Cliente: {processo.nome_cliente || "—"}</div>
 
                           {tipoCalendario === "producao" && (
-                            <div style={estilos.subtextoStyle}>
-                              Valor reservado neste dia: {valorProcessoDia.toFixed(2)} €
-                            </div>
+                            <div style={estilos.subtextoStyle}>Valor reservado neste dia: {valorProcessoDia.toFixed(2)} €</div>
                           )}
 
-                          <div style={estilos.subtextoStyle}>
-                            Responsável obra: {processo.responsavel_obra_nome || "—"} ·{" "}
-                            {processo.responsavel_obra_email || "sem email"}
-                          </div>
+                          <div style={estilos.subtextoStyle}>Responsável obra: {processo.responsavel_obra_nome || "—"} · {processo.responsavel_obra_email || "sem email"}</div>
+                          <div style={estilos.subtextoStyle}>Acabamentos: {processo.responsavel_acabamentos_nome || "—"} · {processo.responsavel_acabamentos_email || "sem email"}</div>
+                          <div style={estilos.subtextoStyle}>Montagem: {processo.responsavel_montagem_nome || "—"} · {processo.responsavel_montagem_email || "sem email"}</div>
+                          <div style={estilos.subtextoStyle}>Produção: {formatarData(planeamento?.inicioProducao || null)} até {formatarData(planeamento?.fimProducao || null)}</div>
+                          <div style={estilos.subtextoStyle}>Acabamentos: {formatarData(planeamento?.inicioAcabamento || null)} até {formatarData(planeamento?.fimAcabamento || null)}</div>
+                          <div style={estilos.subtextoStyle}>Montagem: {formatarData(planeamento?.inicioMontagem || null)} até {formatarData(planeamento?.fimMontagem || null)}</div>
+                          <div style={estilos.subtextoStyle}>Entrega calculada: {formatarData(planeamento?.dataEntregaCalculada || null)}</div>
 
-                          <div style={estilos.subtextoStyle}>
-                            Acabamentos: {processo.responsavel_acabamentos_nome || "—"} ·{" "}
-                            {processo.responsavel_acabamentos_email || "sem email"}
-                          </div>
-
-                          <div style={estilos.subtextoStyle}>
-                            Montagem: {processo.responsavel_montagem_nome || "—"} ·{" "}
-                            {processo.responsavel_montagem_email || "sem email"}
-                          </div>
-
-                          <div style={estilos.subtextoStyle}>
-                            Produção: {formatarData(planeamento?.inicioProducao || null)} até{" "}
-                            {formatarData(planeamento?.fimProducao || null)}
-                          </div>
-
-                          <div style={estilos.subtextoStyle}>
-                            Acabamentos: {formatarData(planeamento?.inicioAcabamento || null)} até{" "}
-                            {formatarData(planeamento?.fimAcabamento || null)}
-                          </div>
-
-                          <div style={estilos.subtextoStyle}>
-                            Montagem: {formatarData(planeamento?.inicioMontagem || null)} até{" "}
-                            {formatarData(planeamento?.fimMontagem || null)}
-                          </div>
-
-                          <div style={estilos.subtextoStyle}>
-                            Entrega calculada:{" "}
-                            {formatarData(planeamento?.dataEntregaCalculada || null)}
-                          </div>
-
-                          {planeamento?.temDatasManuais && (
-                            <div style={estilos.manualBadgeStyle}>Esta obra tem datas manuais</div>
-                          )}
-
-                          {processo.calendario_arquivado && (
-                            <div style={estilos.arquivadoBadgeStyle}>Obra arquivada</div>
-                          )}
+                          {planeamento?.temDatasManuais && <div style={estilos.manualBadgeStyle}>Esta obra tem datas manuais</div>}
+                          {processo.calendario_arquivado && <div style={estilos.arquivadoBadgeStyle}>Obra arquivada</div>}
                         </div>
                       );
                     })}
@@ -2505,51 +1954,25 @@ export default function AdminCalendarioPage() {
               </div>
 
               <div style={estilos.modalAcoesStyle}>
-                <button
-                  type="button"
-                  onClick={fecharModalBloqueio}
-                  style={estilos.botaoSecundarioStyle}
-                >
-                  Fechar
-                </button>
+                <button type="button" onClick={fecharModalBloqueio} style={estilos.botaoSecundarioStyle}>Fechar</button>
 
                 {diaSelecionadoFimSemana && !diaSelecionadoFimSemanaDesbloqueado && (
-                  <button
-                    type="button"
-                    onClick={desbloquearFimSemana}
-                    style={estilos.botaoPrincipalStyle}
-                    disabled={aGuardarBloqueio}
-                  >
+                  <button type="button" onClick={desbloquearFimSemana} style={estilos.botaoPrincipalStyle} disabled={aGuardarBloqueio}>
                     {aGuardarBloqueio ? "A desbloquear..." : "Desbloquear fim de semana"}
                   </button>
                 )}
 
                 {diaSelecionadoFimSemana && diaSelecionadoFimSemanaDesbloqueado && (
-                  <button
-                    type="button"
-                    onClick={voltarABloquearFimSemana}
-                    style={estilos.botaoRemoverStyle}
-                    disabled={aRemoverBloqueio}
-                  >
+                  <button type="button" onClick={voltarABloquearFimSemana} style={estilos.botaoRemoverStyle} disabled={aRemoverBloqueio}>
                     {aRemoverBloqueio ? "A bloquear..." : "Voltar a bloquear"}
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={removerBloqueio}
-                  style={estilos.botaoRemoverStyle}
-                  disabled={aRemoverBloqueio}
-                >
+                <button type="button" onClick={removerBloqueio} style={estilos.botaoRemoverStyle} disabled={aRemoverBloqueio}>
                   {aRemoverBloqueio ? "A remover..." : "Remover Bloqueio"}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={guardarBloqueio}
-                  style={estilos.botaoPrincipalStyle}
-                  disabled={aGuardarBloqueio}
-                >
+                <button type="button" onClick={guardarBloqueio} style={estilos.botaoPrincipalStyle} disabled={aGuardarBloqueio}>
                   {aGuardarBloqueio ? "A guardar..." : "Guardar Bloqueio"}
                 </button>
               </div>
