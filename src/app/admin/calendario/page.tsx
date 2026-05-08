@@ -2,16 +2,10 @@
 
 /*
   PAGE.TSX COMPLETO — Calendário Admin VALERIE
-  Inclui:
-  - Produção por meta diária a 100%
-  - VAL visível no calendário
-  - Ordenação por data de montagem/entrega
-  - Acabamentos calculados para trás a partir da montagem/entrega/fim acabamento
-  - Produção calculada antes dos acabamentos/montagem/entrega, respeitando capacidade diária
-  - Datas manuais editáveis em Produção, Acabamentos e Montagens
-  - Arquivar/restaurar obras
-  - Responsáveis e emails
-  - Bloqueios e desbloqueio de fins de semana
+  Corrigido:
+  - Produção automática preenche cada dia até 100% da meta diária antes de passar ao dia seguinte
+  - Mantém bloqueios, fins de semana e desbloqueios
+  - Mantém datas manuais, acabamentos, montagens, arquivo, responsáveis e emails
 */
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -464,27 +458,74 @@ export default function AdminCalendarioPage() {
     if (valorTotal <= 0) return { datasProducao, valorProducaoPorDia };
 
     let valorRestante = valorTotal;
-    let cursor = limiteISO ? diaUtilAnterior(parseDateOnly(limiteISO)) : proximoDiaUtil(new Date());
+    const limite = limiteISO ? parseDateOnly(limiteISO) : null;
+    if (limite) limite.setHours(0, 0, 0, 0);
+
+    let cursor = processo.data_inicio_prevista
+      ? proximoDiaUtil(parseDateOnly(processo.data_inicio_prevista))
+      : proximoDiaUtil(new Date());
+
+    cursor.setHours(0, 0, 0, 0);
+
     let seguranca = 0;
 
     while (valorRestante > 0.009 && seguranca < 1460) {
-      const chave = formatarDataISO(cursor);
+      const antesDoLimite = !limite || cursor.getTime() < limite.getTime();
+
+      if (!antesDoLimite) break;
 
       if (eDiaUtil(cursor)) {
+        const chave = formatarDataISO(cursor);
         const cargaAtual = cargaProducaoPorDia[chave] || 0;
         const capacidade = objetivoDiario > 0 ? Math.max(objetivoDiario - cargaAtual, 0) : valorRestante;
 
-        if (capacidade > 0) {
+        if (capacidade > 0.009) {
           const valorAReservar = Math.min(valorRestante, capacidade);
-          if (!datasProducao.includes(chave)) datasProducao.unshift(chave);
+
+          if (!datasProducao.includes(chave)) datasProducao.push(chave);
+
           valorProducaoPorDia[chave] = (valorProducaoPorDia[chave] || 0) + valorAReservar;
           cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
           valorRestante -= valorAReservar;
+
+          const novaCarga = cargaProducaoPorDia[chave] || 0;
+
+          if (objetivoDiario > 0 && novaCarga < objetivoDiario - 0.009 && valorRestante > 0.009) {
+            seguranca += 1;
+            continue;
+          }
         }
       }
 
-      cursor.setDate(cursor.getDate() - 1);
+      cursor.setDate(cursor.getDate() + 1);
+      cursor = proximoDiaUtil(cursor);
       seguranca += 1;
+    }
+
+    if (valorRestante > 0.009 && limiteISO) {
+      let cursorRetroativo = diaUtilAnterior(parseDateOnly(limiteISO));
+      let segurancaRetroativa = 0;
+
+      while (valorRestante > 0.009 && segurancaRetroativa < 1460) {
+        if (eDiaUtil(cursorRetroativo)) {
+          const chave = formatarDataISO(cursorRetroativo);
+          const cargaAtual = cargaProducaoPorDia[chave] || 0;
+          const capacidade = objetivoDiario > 0 ? Math.max(objetivoDiario - cargaAtual, 0) : valorRestante;
+
+          if (capacidade > 0.009) {
+            const valorAReservar = Math.min(valorRestante, capacidade);
+
+            if (!datasProducao.includes(chave)) datasProducao.unshift(chave);
+
+            valorProducaoPorDia[chave] = (valorProducaoPorDia[chave] || 0) + valorAReservar;
+            cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
+            valorRestante -= valorAReservar;
+          }
+        }
+
+        cursorRetroativo.setDate(cursorRetroativo.getDate() - 1);
+        segurancaRetroativa += 1;
+      }
     }
 
     if (datasProducao.length === 0) {
@@ -497,6 +538,8 @@ export default function AdminCalendarioPage() {
         cargaProducaoPorDia[chave] = (cargaProducaoPorDia[chave] || 0) + valorTotal;
       }
     }
+
+    datasProducao.sort((a, b) => a.localeCompare(b));
 
     return { datasProducao, valorProducaoPorDia };
   }
@@ -1341,7 +1384,7 @@ export default function AdminCalendarioPage() {
             </div>
             <button type="button" onClick={guardarMetaMensal} style={estilos.botaoPrincipalStyle} disabled={aGuardarMeta}>{aGuardarMeta ? "A guardar..." : "Guardar Meta"}</button>
           </div>
-          <div style={estilos.metaAjudaStyle}>A montagem/entrega manda. O sistema calcula acabamentos para trás e depois encaixa a produção antes, enchendo os dias até à meta diária.</div>
+          <div style={estilos.metaAjudaStyle}>A montagem/entrega manda. O sistema calcula acabamentos para trás e depois encaixa a produção antes, enchendo cada dia até 100% da meta diária antes de passar para o dia seguinte.</div>
         </div>
 
         {mensagem && <div style={estilos.mensagemStyle}>{mensagem}</div>}
