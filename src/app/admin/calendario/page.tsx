@@ -1,11 +1,16 @@
 "use client";
 
 /*
-  PAGE.TSX COMPLETO — Calendário Admin VALERIE
+  PAGE.TSX COMPLETO — Calendário Admin
   Corrigido:
-  - Produção automática preenche cada dia até 100% da meta diária antes de passar ao dia seguinte
-  - Mantém bloqueios, fins de semana e desbloqueios
-  - Mantém datas manuais, acabamentos, montagens, arquivo, responsáveis e emails
+  - Produção automática nunca começa em dias passados
+  - Meta anual global por ano, definida uma vez e usada em todos os meses
+  - Cartão superior mostra valor ocupado no mês: soma real dos valores reservados nos dias do mês
+  - Produção por meta diária a 100%
+  - VAL visível no calendário
+  - Produção não é mexida quando ajustas acabamentos/montagens
+  - Se houver montagem ou fim de acabamento e dias de acabamento, o acabamento é calculado para trás
+  - Datas manuais, arquivo, responsáveis, emails e bloqueios
 */
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -30,6 +35,7 @@ type ProcessoCalendario = {
   valor_estimado_com_desconto: number | null;
   valor_final: number | null;
   created_at: string | null;
+
   responsavel_obra_nome?: string | null;
   responsavel_obra_email?: string | null;
   responsavel_acabamentos_nome?: string | null;
@@ -37,12 +43,14 @@ type ProcessoCalendario = {
   responsavel_montagem_nome?: string | null;
   responsavel_montagem_email?: string | null;
   admin_alerta_email?: string | null;
+
   data_inicio_producao_manual?: string | null;
   data_fim_producao_manual?: string | null;
   data_inicio_acabamento_manual?: string | null;
   data_fim_acabamento_manual?: string | null;
   data_inicio_montagem_manual?: string | null;
   data_fim_montagem_manual?: string | null;
+
   calendario_arquivado?: boolean | null;
 };
 
@@ -62,15 +70,15 @@ type MetaFaturacao = {
   created_at: string | null;
 };
 
-type TipoCalendario = "producao" | "acabamentos" | "montagens";
-type FiltroArquivo = "ativas" | "arquivadas" | "todas";
-
 type DiaMes = {
   data: Date;
   chave: string;
   dia: number;
   pertenceAoMesAtual: boolean;
 };
+
+type TipoCalendario = "producao" | "acabamentos" | "montagens";
+type FiltroArquivo = "ativas" | "arquivadas" | "todas";
 
 type PlaneamentoProcesso = {
   processo: ProcessoCalendario;
@@ -86,6 +94,16 @@ type PlaneamentoProcesso = {
   fimMontagem: string | null;
   dataEntregaCalculada: string | null;
   temDatasManuais: boolean;
+};
+
+type AlertaPlaneamento = {
+  id: string;
+  titulo: string;
+  texto: string;
+  data: string;
+  diasAte: number;
+  nivel: "urgente" | "breve" | "normal";
+  processo: ProcessoCalendario;
 };
 
 type ContactosEdit = {
@@ -107,19 +125,11 @@ type DatasManuaisEdit = {
   data_fim_montagem_manual: string;
 };
 
-type AlertaPlaneamento = {
-  id: string;
-  titulo: string;
-  texto: string;
-  data: string;
-  diasAte: number;
-  nivel: "urgente" | "breve" | "normal";
-};
-
-const DESBLOQUEIO_FIM_SEMANA = "__FIM_SEMANA_DESBLOQUEADO__";
 const NOMES_DIAS_MOBILE = ["S", "T", "Q", "Q", "S", "S", "D"];
 const NOMES_DIAS_DESKTOP = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const DESBLOQUEIO_FIM_SEMANA = "__FIM_SEMANA_DESBLOQUEADO__";
 const ESTADOS_DISPONIVEIS = ["Todos", "Validado"] as const;
+const MES_META_GLOBAL = 0;
 
 const COLUNAS_PROCESSOS =
   "id, codigo_val, nome_cliente, nome_obra, estado, dias_fabrico_previstos, dias_acabamento_previstos, dias_montagem_previstos, dias_totais_previstos, data_inicio_prevista, data_entrega_prevista, valor_diario_referencia, valor_estimado, valor_estimado_com_desconto, valor_final, created_at, responsavel_obra_nome, responsavel_obra_email, responsavel_acabamentos_nome, responsavel_acabamentos_email, responsavel_montagem_nome, responsavel_montagem_email, admin_alerta_email, data_inicio_producao_manual, data_fim_producao_manual, data_inicio_acabamento_manual, data_fim_acabamento_manual, data_inicio_montagem_manual, data_fim_montagem_manual, calendario_arquivado";
@@ -136,13 +146,14 @@ export default function AdminCalendarioPage() {
   const [mensagem, setMensagem] = useState("");
 
   const [larguraJanela, setLarguraJanela] = useState(1200);
-  const [tipoCalendario, setTipoCalendario] = useState<TipoCalendario>("producao");
+  const [tipoCalendario, setTipoCalendario] =
+    useState<TipoCalendario>("producao");
   const [filtroArquivo, setFiltroArquivo] = useState<FiltroArquivo>("ativas");
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] =
     useState<(typeof ESTADOS_DISPONIVEIS)[number]>("Todos");
 
-  const [mesAtual, setMesAtual] = useState(() => {
+  const [mesAtual, setMesAtual] = useState<Date>(() => {
     const hoje = new Date();
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   });
@@ -155,16 +166,34 @@ export default function AdminCalendarioPage() {
   const [metaMensalEdit, setMetaMensalEdit] = useState("");
   const [aGuardarMeta, setAGuardarMeta] = useState(false);
 
-  const [diasAcabamentoEdit, setDiasAcabamentoEdit] = useState<Record<string, string>>({});
-  const [contactosEdit, setContactosEdit] = useState<Record<string, ContactosEdit>>({});
-  const [datasManuaisEdit, setDatasManuaisEdit] = useState<Record<string, DatasManuaisEdit>>({});
-  const [cartoesAbertos, setCartoesAbertos] = useState<Record<string, boolean>>({});
+  const [diasAcabamentoEdit, setDiasAcabamentoEdit] = useState<
+    Record<string, string>
+  >({});
+  const [contactosEdit, setContactosEdit] = useState<
+    Record<string, ContactosEdit>
+  >({});
+  const [datasManuaisEdit, setDatasManuaisEdit] = useState<
+    Record<string, DatasManuaisEdit>
+  >({});
+  const [cartoesAbertos, setCartoesAbertos] = useState<Record<string, boolean>>(
+    {},
+  );
 
-  const [processoAGuardarAcabamento, setProcessoAGuardarAcabamento] = useState<string | null>(null);
-  const [processoAGuardarContactos, setProcessoAGuardarContactos] = useState<string | null>(null);
-  const [processoAGuardarDatas, setProcessoAGuardarDatas] = useState<string | null>(null);
-  const [processoAEnviarEmail, setProcessoAEnviarEmail] = useState<string | null>(null);
-  const [processoAArquivar, setProcessoAArquivar] = useState<string | null>(null);
+  const [processoAGuardarAcabamento, setProcessoAGuardarAcabamento] = useState<
+    string | null
+  >(null);
+  const [processoAGuardarContactos, setProcessoAGuardarContactos] = useState<
+    string | null
+  >(null);
+  const [processoAGuardarDatas, setProcessoAGuardarDatas] = useState<
+    string | null
+  >(null);
+  const [processoAEnviarEmail, setProcessoAEnviarEmail] = useState<
+    string | null
+  >(null);
+  const [processoAArquivar, setProcessoAArquivar] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     function atualizarLargura() {
@@ -173,383 +202,32 @@ export default function AdminCalendarioPage() {
 
     atualizarLargura();
     window.addEventListener("resize", atualizarLargura);
+
     return () => window.removeEventListener("resize", atualizarLargura);
   }, []);
+
+  const eDesktop = larguraJanela >= 1024;
+  const eTablet = larguraJanela >= 768 && larguraJanela < 1024;
+  const nomesDias = eDesktop ? NOMES_DIAS_DESKTOP : NOMES_DIAS_MOBILE;
 
   useEffect(() => {
     void validarAdmin();
   }, []);
 
   useEffect(() => {
-    if (!aVerificar) void carregarDados();
+    if (!aVerificar) {
+      void carregarDados();
+    }
   }, [mesAtual, aVerificar]);
-
-  const eDesktop = larguraJanela >= 1024;
-  const eTablet = larguraJanela >= 768 && larguraJanela < 1024;
-  const nomesDias = eDesktop ? NOMES_DIAS_DESKTOP : NOMES_DIAS_MOBILE;
-  const estilos = obterEstilosResponsivos(eDesktop, eTablet);
-
-  function parseDateOnly(valor: string) {
-    const [ano, mes, dia] = valor.split("-").map(Number);
-    return new Date(ano, (mes || 1) - 1, dia || 1);
-  }
-
-  function formatarDataISO(data: Date) {
-    const ano = data.getFullYear();
-    const mes = String(data.getMonth() + 1).padStart(2, "0");
-    const dia = String(data.getDate()).padStart(2, "0");
-    return `${ano}-${mes}-${dia}`;
-  }
-
-  function formatarData(valor: string | null | undefined) {
-    if (!valor) return "—";
-    return parseDateOnly(valor).toLocaleDateString("pt-PT");
-  }
-
-  function formatarMesAno(data: Date) {
-    return data.toLocaleDateString("pt-PT", { month: "long", year: "numeric" });
-  }
-
-  function normalizarTexto(valor: string | null | undefined) {
-    return (valor || "").trim().toLowerCase();
-  }
-
-  function eFimDeSemana(data: Date) {
-    return data.getDay() === 0 || data.getDay() === 6;
-  }
-
-  function eDesbloqueioFimSemana(bloqueio: BloqueioCalendario | null) {
-    return bloqueio?.motivo === DESBLOQUEIO_FIM_SEMANA;
-  }
-
-  function obterBloqueioDoDia(data: Date) {
-    const chave = formatarDataISO(data);
-    return bloqueios.find((bloqueio) => bloqueio.data === chave) || null;
-  }
-
-  function eBloqueioManual(data: Date) {
-    const bloqueio = obterBloqueioDoDia(data);
-    return !!bloqueio && !eDesbloqueioFimSemana(bloqueio);
-  }
-
-  function eDiaUtil(data: Date) {
-    const bloqueio = obterBloqueioDoDia(data);
-    if (eBloqueioManual(data)) return false;
-    if (eFimDeSemana(data)) return eDesbloqueioFimSemana(bloqueio);
-    return true;
-  }
-
-  function proximoDiaUtil(dataBase: Date) {
-    const data = new Date(dataBase);
-    data.setHours(0, 0, 0, 0);
-    let seguranca = 0;
-
-    while (!eDiaUtil(data) && seguranca < 730) {
-      data.setDate(data.getDate() + 1);
-      seguranca += 1;
-    }
-
-    return data;
-  }
-
-  function diaUtilAnterior(dataBase: Date) {
-    const data = new Date(dataBase);
-    data.setHours(0, 0, 0, 0);
-    data.setDate(data.getDate() - 1);
-    let seguranca = 0;
-
-    while (!eDiaUtil(data) && seguranca < 730) {
-      data.setDate(data.getDate() - 1);
-      seguranca += 1;
-    }
-
-    return data;
-  }
-
-  function adicionarDiasUteis(dataBase: Date, dias: number) {
-    const datas: string[] = [];
-    const data = new Date(dataBase);
-    data.setHours(0, 0, 0, 0);
-    let seguranca = 0;
-
-    while (datas.length < dias && seguranca < 730) {
-      if (eDiaUtil(data)) datas.push(formatarDataISO(data));
-      data.setDate(data.getDate() + 1);
-      seguranca += 1;
-    }
-
-    return datas;
-  }
-
-  function subtrairDiasUteisAteFim(fimBase: Date, dias: number) {
-    const datas: string[] = [];
-    const data = new Date(fimBase);
-    data.setHours(0, 0, 0, 0);
-    let seguranca = 0;
-
-    while (datas.length < dias && seguranca < 730) {
-      if (eDiaUtil(data)) datas.unshift(formatarDataISO(data));
-      data.setDate(data.getDate() - 1);
-      seguranca += 1;
-    }
-
-    return datas;
-  }
-
-  function obterIntervaloDiasUteis(inicioISO: string | null, fimISO: string | null) {
-    if (!inicioISO || !fimISO) return [];
-
-    const inicio = parseDateOnly(inicioISO);
-    const fim = parseDateOnly(fimISO);
-    inicio.setHours(0, 0, 0, 0);
-    fim.setHours(0, 0, 0, 0);
-    if (inicio.getTime() > fim.getTime()) return [];
-
-    const datas: string[] = [];
-    const cursor = new Date(inicio);
-    let seguranca = 0;
-
-    while (cursor.getTime() <= fim.getTime() && seguranca < 1460) {
-      if (eDiaUtil(cursor)) datas.push(formatarDataISO(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-      seguranca += 1;
-    }
-
-    return datas;
-  }
-
-  function contarDiasUteisAno(ano: number) {
-    let total = 0;
-    const data = new Date(ano, 0, 1);
-
-    while (data.getFullYear() === ano) {
-      if (eDiaUtil(data)) total += 1;
-      data.setDate(data.getDate() + 1);
-    }
-
-    return total;
-  }
-
-  function contarDiasUteisMes(ano: number, mesIndex: number) {
-    let total = 0;
-    const data = new Date(ano, mesIndex, 1);
-
-    while (data.getMonth() === mesIndex) {
-      if (eDiaUtil(data)) total += 1;
-      data.setDate(data.getDate() + 1);
-    }
-
-    return total;
-  }
-
-  function obterValorFinanceiroProcesso(processo: ProcessoCalendario) {
-    return Number(
-      processo.valor_final ??
-        processo.valor_estimado_com_desconto ??
-        processo.valor_estimado ??
-        0
-    );
-  }
-
-  function obterDiasAcabamentoNecessarios(processo: ProcessoCalendario) {
-    return Math.max(Number(processo.dias_acabamento_previstos || 0), 0);
-  }
-
-  function diferencaDias(dataISO: string) {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const data = parseDateOnly(dataISO);
-    data.setHours(0, 0, 0, 0);
-    return Math.ceil((data.getTime() - hoje.getTime()) / 86400000);
-  }
-
-  function obterDataOrdemProcesso(processo: ProcessoCalendario) {
-    return (
-      processo.data_inicio_montagem_manual ||
-      processo.data_fim_montagem_manual ||
-      processo.data_entrega_prevista ||
-      processo.data_fim_acabamento_manual ||
-      processo.data_inicio_prevista ||
-      processo.created_at ||
-      "9999-12-31"
-    );
-  }
-
-  function obterDatasMontagem(processo: ProcessoCalendario) {
-    const manuais = obterIntervaloDiasUteis(
-      processo.data_inicio_montagem_manual || null,
-      processo.data_fim_montagem_manual || null
-    );
-
-    if (manuais.length > 0) return manuais;
-
-    const diasMontagem = Math.max(Number(processo.dias_montagem_previstos || 0), 0);
-    if (diasMontagem <= 0 || !processo.data_entrega_prevista) return [];
-
-    return subtrairDiasUteisAteFim(parseDateOnly(processo.data_entrega_prevista), diasMontagem);
-  }
-
-  function calcularAcabamentos(processo: ProcessoCalendario, datasMontagem: string[], fimProducao: string | null) {
-    const diasAcabamento = obterDiasAcabamentoNecessarios(processo);
-
-    if (processo.data_inicio_acabamento_manual && processo.data_fim_acabamento_manual) {
-      return obterIntervaloDiasUteis(processo.data_inicio_acabamento_manual, processo.data_fim_acabamento_manual);
-    }
-
-    if (diasAcabamento <= 0) return [];
-
-    if (processo.data_fim_acabamento_manual) {
-      return subtrairDiasUteisAteFim(parseDateOnly(processo.data_fim_acabamento_manual), diasAcabamento);
-    }
-
-    if (datasMontagem.length > 0) {
-      const fimAntesMontagem = diaUtilAnterior(parseDateOnly(datasMontagem[0]));
-      return subtrairDiasUteisAteFim(fimAntesMontagem, diasAcabamento);
-    }
-
-    if (processo.data_entrega_prevista) {
-      const fimAntesEntrega = diaUtilAnterior(parseDateOnly(processo.data_entrega_prevista));
-      return subtrairDiasUteisAteFim(fimAntesEntrega, diasAcabamento);
-    }
-
-    if (processo.data_inicio_acabamento_manual) {
-      return adicionarDiasUteis(parseDateOnly(processo.data_inicio_acabamento_manual), diasAcabamento);
-    }
-
-    if (fimProducao) {
-      const inicioAcabamento = parseDateOnly(fimProducao);
-      inicioAcabamento.setDate(inicioAcabamento.getDate() + 1);
-      return adicionarDiasUteis(inicioAcabamento, diasAcabamento);
-    }
-
-    return [];
-  }
-
-  function calcularProducaoManual(processo: ProcessoCalendario, cargaProducaoPorDia: Record<string, number>) {
-    const datasProducao = obterIntervaloDiasUteis(
-      processo.data_inicio_producao_manual || null,
-      processo.data_fim_producao_manual || null
-    );
-
-    const valorProducaoPorDia: Record<string, number> = {};
-    const valorTotal = obterValorFinanceiroProcesso(processo);
-
-    if (datasProducao.length > 0) {
-      const valorDia = valorTotal / datasProducao.length;
-      for (const data of datasProducao) {
-        valorProducaoPorDia[data] = valorDia;
-        cargaProducaoPorDia[data] = (cargaProducaoPorDia[data] || 0) + valorDia;
-      }
-    }
-
-    return { datasProducao, valorProducaoPorDia };
-  }
-
-  function calcularProducaoAutomatica(
-    processo: ProcessoCalendario,
-    limiteISO: string | null,
-    cargaProducaoPorDia: Record<string, number>,
-    objetivoDiario: number
-  ) {
-    const datasProducao: string[] = [];
-    const valorProducaoPorDia: Record<string, number> = {};
-    const valorTotal = obterValorFinanceiroProcesso(processo);
-
-    if (valorTotal <= 0) return { datasProducao, valorProducaoPorDia };
-
-    let valorRestante = valorTotal;
-    const limite = limiteISO ? parseDateOnly(limiteISO) : null;
-    if (limite) limite.setHours(0, 0, 0, 0);
-
-    let cursor = processo.data_inicio_prevista
-      ? proximoDiaUtil(parseDateOnly(processo.data_inicio_prevista))
-      : proximoDiaUtil(new Date());
-
-    cursor.setHours(0, 0, 0, 0);
-
-    let seguranca = 0;
-
-    while (valorRestante > 0.009 && seguranca < 1460) {
-      const antesDoLimite = !limite || cursor.getTime() < limite.getTime();
-
-      if (!antesDoLimite) break;
-
-      if (eDiaUtil(cursor)) {
-        const chave = formatarDataISO(cursor);
-        const cargaAtual = cargaProducaoPorDia[chave] || 0;
-        const capacidade = objetivoDiario > 0 ? Math.max(objetivoDiario - cargaAtual, 0) : valorRestante;
-
-        if (capacidade > 0.009) {
-          const valorAReservar = Math.min(valorRestante, capacidade);
-
-          if (!datasProducao.includes(chave)) datasProducao.push(chave);
-
-          valorProducaoPorDia[chave] = (valorProducaoPorDia[chave] || 0) + valorAReservar;
-          cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
-          valorRestante -= valorAReservar;
-
-          const novaCarga = cargaProducaoPorDia[chave] || 0;
-
-          if (objetivoDiario > 0 && novaCarga < objetivoDiario - 0.009 && valorRestante > 0.009) {
-            seguranca += 1;
-            continue;
-          }
-        }
-      }
-
-      cursor.setDate(cursor.getDate() + 1);
-      cursor = proximoDiaUtil(cursor);
-      seguranca += 1;
-    }
-
-    if (valorRestante > 0.009 && limiteISO) {
-      let cursorRetroativo = diaUtilAnterior(parseDateOnly(limiteISO));
-      let segurancaRetroativa = 0;
-
-      while (valorRestante > 0.009 && segurancaRetroativa < 1460) {
-        if (eDiaUtil(cursorRetroativo)) {
-          const chave = formatarDataISO(cursorRetroativo);
-          const cargaAtual = cargaProducaoPorDia[chave] || 0;
-          const capacidade = objetivoDiario > 0 ? Math.max(objetivoDiario - cargaAtual, 0) : valorRestante;
-
-          if (capacidade > 0.009) {
-            const valorAReservar = Math.min(valorRestante, capacidade);
-
-            if (!datasProducao.includes(chave)) datasProducao.unshift(chave);
-
-            valorProducaoPorDia[chave] = (valorProducaoPorDia[chave] || 0) + valorAReservar;
-            cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
-            valorRestante -= valorAReservar;
-          }
-        }
-
-        cursorRetroativo.setDate(cursorRetroativo.getDate() - 1);
-        segurancaRetroativa += 1;
-      }
-    }
-
-    if (datasProducao.length === 0) {
-      const inicio = processo.data_inicio_prevista ? parseDateOnly(processo.data_inicio_prevista) : new Date();
-      const datasFallback = adicionarDiasUteis(inicio, 1);
-      const chave = datasFallback[0];
-      if (chave) {
-        datasProducao.push(chave);
-        valorProducaoPorDia[chave] = valorTotal;
-        cargaProducaoPorDia[chave] = (cargaProducaoPorDia[chave] || 0) + valorTotal;
-      }
-    }
-
-    datasProducao.sort((a, b) => a.localeCompare(b));
-
-    return { datasProducao, valorProducaoPorDia };
-  }
 
   async function validarAdmin() {
     try {
-      const { data: sessaoData, error: sessaoError } = await supabase.auth.getSession();
+      const { data: sessaoData, error: sessaoError } =
+        await supabase.auth.getSession();
       if (sessaoError) throw sessaoError;
 
       const user = sessaoData.session?.user;
+
       if (!user) {
         router.replace("/login");
         return;
@@ -582,34 +260,45 @@ export default function AdminCalendarioPage() {
       setMensagem("");
 
       const ano = mesAtual.getFullYear();
-      const mes = mesAtual.getMonth() + 1;
 
-      const [processosRes, bloqueiosRes, metaRes] = await Promise.all([
-        supabase
-          .from("processos")
-          .select(COLUNAS_PROCESSOS)
-          .eq("estado", "Validado")
-          .order("created_at", { ascending: true }),
+      const [processosRes, bloqueiosRes, metaGlobalRes, metaAntigaMesRes] =
+        await Promise.all([
+          supabase
+            .from("processos")
+            .select(COLUNAS_PROCESSOS)
+            .eq("estado", "Validado")
+            .order("created_at", { ascending: true }),
 
-        supabase
-          .from("bloqueios_calendario")
-          .select("id, data, motivo, created_at")
-          .order("data", { ascending: true }),
+          supabase
+            .from("bloqueios_calendario")
+            .select("id, data, motivo, created_at")
+            .order("data", { ascending: true }),
 
-        supabase
-          .from("metas_faturacao")
-          .select("*")
-          .eq("ano", ano)
-          .eq("mes", mes)
-          .maybeSingle(),
-      ]);
+          supabase
+            .from("metas_faturacao")
+            .select("*")
+            .eq("ano", ano)
+            .eq("mes", MES_META_GLOBAL)
+            .maybeSingle(),
+
+          supabase
+            .from("metas_faturacao")
+            .select("*")
+            .eq("ano", ano)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
 
       if (processosRes.error) throw processosRes.error;
       if (bloqueiosRes.error) throw bloqueiosRes.error;
-      if (metaRes.error) throw metaRes.error;
+      if (metaGlobalRes.error) throw metaGlobalRes.error;
+      if (metaAntigaMesRes.error) throw metaAntigaMesRes.error;
 
       const listaProcessos = (processosRes.data || []) as ProcessoCalendario[];
-      const meta = (metaRes.data || null) as MetaFaturacao | null;
+      const meta = (metaGlobalRes.data ||
+        metaAntigaMesRes.data ||
+        null) as MetaFaturacao | null;
 
       const diasIniciais: Record<string, string> = {};
       const contactosIniciais: Record<string, ContactosEdit> = {};
@@ -617,26 +306,32 @@ export default function AdminCalendarioPage() {
 
       for (const processo of listaProcessos) {
         diasIniciais[processo.id] =
-          processo.dias_acabamento_previstos !== null && processo.dias_acabamento_previstos !== undefined
+          processo.dias_acabamento_previstos !== null &&
+          processo.dias_acabamento_previstos !== undefined
             ? String(processo.dias_acabamento_previstos)
             : "";
 
         contactosIniciais[processo.id] = {
           responsavel_obra_nome: processo.responsavel_obra_nome || "",
           responsavel_obra_email: processo.responsavel_obra_email || "",
-          responsavel_acabamentos_nome: processo.responsavel_acabamentos_nome || "",
-          responsavel_acabamentos_email: processo.responsavel_acabamentos_email || "",
+          responsavel_acabamentos_nome:
+            processo.responsavel_acabamentos_nome || "",
+          responsavel_acabamentos_email:
+            processo.responsavel_acabamentos_email || "",
           responsavel_montagem_nome: processo.responsavel_montagem_nome || "",
           responsavel_montagem_email: processo.responsavel_montagem_email || "",
           admin_alerta_email: processo.admin_alerta_email || "",
         };
 
         datasIniciais[processo.id] = {
-          data_inicio_producao_manual: processo.data_inicio_producao_manual || "",
+          data_inicio_producao_manual:
+            processo.data_inicio_producao_manual || "",
           data_fim_producao_manual: processo.data_fim_producao_manual || "",
-          data_inicio_acabamento_manual: processo.data_inicio_acabamento_manual || "",
+          data_inicio_acabamento_manual:
+            processo.data_inicio_acabamento_manual || "",
           data_fim_acabamento_manual: processo.data_fim_acabamento_manual || "",
-          data_inicio_montagem_manual: processo.data_inicio_montagem_manual || "",
+          data_inicio_montagem_manual:
+            processo.data_inicio_montagem_manual || "",
           data_fim_montagem_manual: processo.data_fim_montagem_manual || "",
         };
       }
@@ -647,16 +342,213 @@ export default function AdminCalendarioPage() {
       setDiasAcabamentoEdit(diasIniciais);
       setContactosEdit(contactosIniciais);
       setDatasManuaisEdit(datasIniciais);
-      setMetaMensalEdit(meta?.objetivo_mensal !== null && meta?.objetivo_mensal !== undefined ? String(meta.objetivo_mensal) : "");
+      setMetaMensalEdit(
+        meta?.objetivo_mensal !== null && meta?.objetivo_mensal !== undefined
+          ? String(meta.objetivo_mensal)
+          : "",
+      );
     } catch (error: any) {
       console.error(error);
-      setMensagem(error?.message || "Erro ao carregar calendário. Confirma se as colunas novas existem no Supabase.");
+      setMensagem(
+        error?.message ||
+          "Erro ao carregar calendário. Confirma se as colunas novas existem no Supabase.",
+      );
     } finally {
       setACarregar(false);
     }
   }
 
-  const processosValidados = useMemo(() => processos.filter((p) => p.estado === "Validado"), [processos]);
+  function parseDateOnly(valor: string) {
+    const [ano, mes, dia] = valor.split("-").map(Number);
+    return new Date(ano, (mes || 1) - 1, dia || 1);
+  }
+
+  function formatarDataISO(data: Date) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  function formatarData(valor: string | null | undefined) {
+    if (!valor) return "—";
+    return parseDateOnly(valor).toLocaleDateString("pt-PT");
+  }
+
+  function formatarMoeda(valor: number) {
+    return `${valor.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+  }
+
+  function formatarMesAno(data: Date) {
+    return data.toLocaleDateString("pt-PT", { month: "long", year: "numeric" });
+  }
+
+  function normalizarTexto(valor: string | null | undefined) {
+    return (valor || "").trim().toLowerCase();
+  }
+
+  function diferencaDias(dataISO: string) {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const data = parseDateOnly(dataISO);
+    data.setHours(0, 0, 0, 0);
+    return Math.ceil((data.getTime() - hoje.getTime()) / 86400000);
+  }
+
+  function eFimDeSemana(data: Date) {
+    const diaSemana = data.getDay();
+    return diaSemana === 0 || diaSemana === 6;
+  }
+
+  function eDesbloqueioFimSemana(bloqueio: BloqueioCalendario | null) {
+    return bloqueio?.motivo === DESBLOQUEIO_FIM_SEMANA;
+  }
+
+  function obterBloqueioDoDia(data: Date) {
+    const chave = formatarDataISO(data);
+    return bloqueios.find((bloqueio) => bloqueio.data === chave) || null;
+  }
+
+  function eBloqueioManual(data: Date) {
+    const bloqueio = obterBloqueioDoDia(data);
+    return !!bloqueio && !eDesbloqueioFimSemana(bloqueio);
+  }
+
+  function eDiaUtil(data: Date) {
+    const bloqueio = obterBloqueioDoDia(data);
+    if (eBloqueioManual(data)) return false;
+    if (eFimDeSemana(data)) return eDesbloqueioFimSemana(bloqueio);
+    return true;
+  }
+
+  function hojeSemHoras() {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    return hoje;
+  }
+
+  function maxData(dataA: Date, dataB: Date) {
+    const a = new Date(dataA);
+    const b = new Date(dataB);
+    a.setHours(0, 0, 0, 0);
+    b.setHours(0, 0, 0, 0);
+    return a.getTime() >= b.getTime() ? a : b;
+  }
+
+  function proximoDiaUtil(dataBase: Date) {
+    const data = new Date(dataBase);
+    data.setHours(0, 0, 0, 0);
+    let seguranca = 0;
+    while (!eDiaUtil(data) && seguranca < 730) {
+      data.setDate(data.getDate() + 1);
+      seguranca += 1;
+    }
+    return data;
+  }
+
+  function diaUtilAnterior(dataBase: Date) {
+    const data = new Date(dataBase);
+    data.setHours(0, 0, 0, 0);
+    data.setDate(data.getDate() - 1);
+    let seguranca = 0;
+    while (!eDiaUtil(data) && seguranca < 730) {
+      data.setDate(data.getDate() - 1);
+      seguranca += 1;
+    }
+    return data;
+  }
+
+  function adicionarDiasUteis(dataBase: Date, dias: number) {
+    const datas: string[] = [];
+    const data = new Date(dataBase);
+    data.setHours(0, 0, 0, 0);
+    let seguranca = 0;
+    while (datas.length < dias && seguranca < 730) {
+      if (eDiaUtil(data)) datas.push(formatarDataISO(data));
+      data.setDate(data.getDate() + 1);
+      seguranca += 1;
+    }
+    return datas;
+  }
+
+  function subtrairDiasUteisAteFim(fimBase: Date, dias: number) {
+    const datas: string[] = [];
+    const data = new Date(fimBase);
+    data.setHours(0, 0, 0, 0);
+    let seguranca = 0;
+    while (datas.length < dias && seguranca < 730) {
+      if (eDiaUtil(data)) datas.unshift(formatarDataISO(data));
+      data.setDate(data.getDate() - 1);
+      seguranca += 1;
+    }
+    return datas;
+  }
+
+  function obterIntervaloDiasUteis(
+    inicioISO: string | null,
+    fimISO: string | null,
+  ) {
+    if (!inicioISO || !fimISO) return [];
+    const inicio = parseDateOnly(inicioISO);
+    const fim = parseDateOnly(fimISO);
+    inicio.setHours(0, 0, 0, 0);
+    fim.setHours(0, 0, 0, 0);
+    if (inicio.getTime() > fim.getTime()) return [];
+    const datas: string[] = [];
+    const cursor = new Date(inicio);
+    let seguranca = 0;
+    while (cursor.getTime() <= fim.getTime() && seguranca < 1460) {
+      if (eDiaUtil(cursor)) datas.push(formatarDataISO(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+      seguranca += 1;
+    }
+    return datas;
+  }
+
+  function contarDiasUteisAno(ano: number) {
+    let total = 0;
+    const data = new Date(ano, 0, 1);
+    while (data.getFullYear() === ano) {
+      if (eDiaUtil(data)) total += 1;
+      data.setDate(data.getDate() + 1);
+    }
+    return total;
+  }
+
+  function contarDiasUteisMes(ano: number, mesIndex: number) {
+    let total = 0;
+    const data = new Date(ano, mesIndex, 1);
+    while (data.getMonth() === mesIndex) {
+      if (eDiaUtil(data)) total += 1;
+      data.setDate(data.getDate() + 1);
+    }
+    return total;
+  }
+
+  function obterBloqueiosUteisDoAno(ano: number) {
+    return bloqueios.filter((bloqueio) => {
+      const data = parseDateOnly(bloqueio.data);
+      return (
+        data.getFullYear() === ano &&
+        !eFimDeSemana(data) &&
+        !eDesbloqueioFimSemana(bloqueio)
+      );
+    });
+  }
+
+  function obterValorFinanceiroProcesso(processo: ProcessoCalendario) {
+    return Number(
+      processo.valor_final ??
+        processo.valor_estimado_com_desconto ??
+        processo.valor_estimado ??
+        0,
+    );
+  }
+
+  const processosValidados = useMemo(
+    () => processos.filter((processo) => processo.estado === "Validado"),
+    [processos],
+  );
 
   const processosFiltradosPorArquivo = useMemo(() => {
     return processosValidados.filter((processo) => {
@@ -669,13 +561,17 @@ export default function AdminCalendarioPage() {
 
   const processosVisiveis = useMemo(() => {
     return processosFiltradosPorArquivo.filter((processo) => {
-      const termo = normalizarTexto(pesquisa);
+      const textoPesquisa = normalizarTexto(pesquisa);
+      const nomeObra = normalizarTexto(processo.nome_obra);
+      const nomeCliente = normalizarTexto(processo.nome_cliente);
+      const codigoVal = normalizarTexto(processo.codigo_val);
+      const estado = processo.estado || "";
       const passaPesquisa =
-        termo === "" ||
-        normalizarTexto(processo.nome_obra).includes(termo) ||
-        normalizarTexto(processo.nome_cliente).includes(termo) ||
-        normalizarTexto(processo.codigo_val).includes(termo);
-      const passaEstado = filtroEstado === "Todos" || processo.estado === filtroEstado;
+        textoPesquisa === "" ||
+        nomeObra.includes(textoPesquisa) ||
+        nomeCliente.includes(textoPesquisa) ||
+        codigoVal.includes(textoPesquisa);
+      const passaEstado = filtroEstado === "Todos" || estado === filtroEstado;
       return passaPesquisa && passaEstado;
     });
   }, [processosFiltradosPorArquivo, pesquisa, filtroEstado]);
@@ -686,23 +582,39 @@ export default function AdminCalendarioPage() {
     const primeiroDia = new Date(ano, mes, 1);
     const ultimoDia = new Date(ano, mes + 1, 0);
     const primeiroDiaSemana = (primeiroDia.getDay() + 6) % 7;
+    const totalDiasMes = ultimoDia.getDate();
     const dias: DiaMes[] = [];
 
     for (let i = primeiroDiaSemana; i > 0; i--) {
       const data = new Date(ano, mes, 1 - i);
-      dias.push({ data, chave: formatarDataISO(data), dia: data.getDate(), pertenceAoMesAtual: false });
+      dias.push({
+        data,
+        chave: formatarDataISO(data),
+        dia: data.getDate(),
+        pertenceAoMesAtual: false,
+      });
     }
 
-    for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
+    for (let dia = 1; dia <= totalDiasMes; dia++) {
       const data = new Date(ano, mes, dia);
-      dias.push({ data, chave: formatarDataISO(data), dia, pertenceAoMesAtual: true });
+      dias.push({
+        data,
+        chave: formatarDataISO(data),
+        dia,
+        pertenceAoMesAtual: true,
+      });
     }
 
     while (dias.length < 42) {
       const ultimo = dias[dias.length - 1].data;
       const proximo = new Date(ultimo);
       proximo.setDate(ultimo.getDate() + 1);
-      dias.push({ data: proximo, chave: formatarDataISO(proximo), dia: proximo.getDate(), pertenceAoMesAtual: false });
+      dias.push({
+        data: proximo,
+        chave: formatarDataISO(proximo),
+        dia: proximo.getDate(),
+        pertenceAoMesAtual: false,
+      });
     }
 
     return dias;
@@ -711,118 +623,323 @@ export default function AdminCalendarioPage() {
   const resumo = useMemo(() => {
     const ano = mesAtual.getFullYear();
     const mesIndex = mesAtual.getMonth();
-    const objetivoMensal = Number(metaAtual?.objetivo_mensal || 0);
-    const objetivoAnual = objetivoMensal * 12;
+    const objetivoAnual = Number(metaAtual?.objetivo_mensal || 0);
+    const objetivoMensal = objetivoAnual > 0 ? objetivoAnual / 12 : 0;
     const diasUteisAno = contarDiasUteisAno(ano);
+    const bloqueiosUteisAno = obterBloqueiosUteisDoAno(ano).length;
+    const diasUteisReaisAno = Math.max(diasUteisAno, 0);
     const diasUteisMes = contarDiasUteisMes(ano, mesIndex);
-    const objetivoDiario = diasUteisAno > 0 ? objetivoAnual / diasUteisAno : 0;
-    const totalArquivados = processosValidados.filter((p) => p.calendario_arquivado === true).length;
+    const diasUteisReaisMes = Math.max(diasUteisMes, 0);
+    const objetivoDiario =
+      diasUteisReaisAno > 0 ? objetivoAnual / diasUteisReaisAno : 0;
+    const valorPrevisto = processosValidados.reduce(
+      (acc, processo) => acc + obterValorFinanceiroProcesso(processo),
+      0,
+    );
+    const totalArquivados = processosValidados.filter(
+      (processo) => processo.calendario_arquivado === true,
+    ).length;
+    const totalAtivos = processosValidados.length - totalArquivados;
 
     return {
-      totalAtivos: processosValidados.length - totalArquivados,
+      totalProcessosVisiveis: processosVisiveis.length,
+      totalProcessosPlaneados: processosValidados.length,
       totalArquivados,
+      totalAtivos,
       objetivoMensal,
       objetivoAnual,
       objetivoDiario,
+      valorPrevisto,
       diasUteisAno,
+      diasUteisReaisAno,
       diasUteisMes,
+      diasUteisReaisMes,
+      bloqueiosUteisAno,
     };
-  }, [processosValidados, metaAtual, mesAtual, bloqueios]);
+  }, [processosValidados, processosVisiveis, metaAtual, mesAtual, bloqueios]);
+
+  function obterDiasProducaoNecessarios(processo: ProcessoCalendario) {
+    const valor = obterValorFinanceiroProcesso(processo);
+    if (resumo.objetivoDiario > 0 && valor > 0)
+      return Math.max(Math.ceil(valor / resumo.objetivoDiario), 1);
+    const diasGuardados = Number(
+      processo.dias_fabrico_previstos || processo.dias_totais_previstos || 0,
+    );
+    return Math.max(Math.ceil(diasGuardados), 1);
+  }
+
+  function obterDiasAcabamentoNecessarios(processo: ProcessoCalendario) {
+    return Math.max(Number(processo.dias_acabamento_previstos || 0), 0);
+  }
+
+  function calcularAcabamentosSemMexerNaProducao(
+    processo: ProcessoCalendario,
+    fimProducao: string | null,
+  ) {
+    const diasAcabamento = obterDiasAcabamentoNecessarios(processo);
+
+    if (
+      processo.data_inicio_acabamento_manual &&
+      processo.data_fim_acabamento_manual
+    ) {
+      return obterIntervaloDiasUteis(
+        processo.data_inicio_acabamento_manual,
+        processo.data_fim_acabamento_manual,
+      );
+    }
+
+    if (diasAcabamento <= 0) return [];
+
+    if (processo.data_fim_acabamento_manual)
+      return subtrairDiasUteisAteFim(
+        parseDateOnly(processo.data_fim_acabamento_manual),
+        diasAcabamento,
+      );
+
+    if (processo.data_inicio_montagem_manual) {
+      const fimAcabamentoAntesMontagem = diaUtilAnterior(
+        parseDateOnly(processo.data_inicio_montagem_manual),
+      );
+      return subtrairDiasUteisAteFim(
+        fimAcabamentoAntesMontagem,
+        diasAcabamento,
+      );
+    }
+
+    if (processo.data_inicio_acabamento_manual)
+      return adicionarDiasUteis(
+        parseDateOnly(processo.data_inicio_acabamento_manual),
+        diasAcabamento,
+      );
+
+    if (fimProducao) {
+      const inicioAcabamento = parseDateOnly(fimProducao);
+      inicioAcabamento.setDate(inicioAcabamento.getDate() + 1);
+      return adicionarDiasUteis(inicioAcabamento, diasAcabamento);
+    }
+
+    return [];
+  }
 
   function calcularPlaneamentos(listaProcessos: ProcessoCalendario[]) {
     const processosOrdenados = [...listaProcessos].sort((a, b) => {
-      const dataA = obterDataOrdemProcesso(a);
-      const dataB = obterDataOrdemProcesso(b);
-      return dataA.localeCompare(dataB);
+      const dataInicioA = a.data_inicio_prevista
+        ? parseDateOnly(a.data_inicio_prevista).getTime()
+        : a.created_at
+          ? new Date(a.created_at).getTime()
+          : 0;
+      const dataInicioB = b.data_inicio_prevista
+        ? parseDateOnly(b.data_inicio_prevista).getTime()
+        : b.created_at
+          ? new Date(b.created_at).getTime()
+          : 0;
+      return dataInicioA - dataInicioB;
     });
 
     const resultado: PlaneamentoProcesso[] = [];
     const cargaProducaoPorDia: Record<string, number> = {};
+    const hoje = hojeSemHoras();
 
     for (const processo of processosOrdenados) {
-      const temProducaoManual = !!processo.data_inicio_producao_manual && !!processo.data_fim_producao_manual;
-      const datasMontagem = obterDatasMontagem(processo);
-      const limiteProducaoBase =
-        processo.data_inicio_acabamento_manual ||
-        processo.data_fim_acabamento_manual ||
-        datasMontagem[0] ||
-        processo.data_entrega_prevista ||
-        null;
+      const datasProducaoManuais = obterIntervaloDiasUteis(
+        processo.data_inicio_producao_manual || null,
+        processo.data_fim_producao_manual || null,
+      );
+      const datasMontagemManuais = obterIntervaloDiasUteis(
+        processo.data_inicio_montagem_manual || null,
+        processo.data_fim_montagem_manual || null,
+      );
+      const temProducaoManual = datasProducaoManuais.length > 0;
+      const temMontagemManual = datasMontagemManuais.length > 0;
+      let datasProducao: string[] = [];
+      const valorProducaoPorDia: Record<string, number> = {};
+      const valorTotalProcesso = obterValorFinanceiroProcesso(processo);
 
-      const producao = temProducaoManual
-        ? calcularProducaoManual(processo, cargaProducaoPorDia)
-        : calcularProducaoAutomatica(processo, limiteProducaoBase, cargaProducaoPorDia, resumo.objetivoDiario);
+      if (temProducaoManual) {
+        datasProducao = datasProducaoManuais;
+        if (datasProducao.length > 0) {
+          const valorPorDiaManual = valorTotalProcesso / datasProducao.length;
+          for (const dataManual of datasProducao) {
+            valorProducaoPorDia[dataManual] = valorPorDiaManual;
+            cargaProducaoPorDia[dataManual] =
+              (cargaProducaoPorDia[dataManual] || 0) + valorPorDiaManual;
+          }
+        }
+      } else {
+        const dataInicioOriginal = processo.data_inicio_prevista
+          ? parseDateOnly(processo.data_inicio_prevista)
+          : hoje;
+        const dataInicioPreferida = maxData(dataInicioOriginal, hoje);
+        let cursor = proximoDiaUtil(dataInicioPreferida);
+        let valorRestante = valorTotalProcesso;
+        let seguranca = 0;
 
-      const fimProducao = producao.datasProducao[producao.datasProducao.length - 1] || null;
-      const datasAcabamento = calcularAcabamentos(processo, datasMontagem, fimProducao);
+        while (valorRestante > 0.009 && seguranca < 1460) {
+          const chave = formatarDataISO(cursor);
+          if (eDiaUtil(cursor)) {
+            const cargaAtual = cargaProducaoPorDia[chave] || 0;
+            const capacidadeDia =
+              resumo.objetivoDiario > 0
+                ? Math.max(resumo.objetivoDiario - cargaAtual, 0)
+                : valorRestante;
+            if (capacidadeDia > 0) {
+              const valorAReservar = Math.min(valorRestante, capacidadeDia);
+              if (!datasProducao.includes(chave)) datasProducao.push(chave);
+              valorProducaoPorDia[chave] =
+                (valorProducaoPorDia[chave] || 0) + valorAReservar;
+              cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
+              valorRestante -= valorAReservar;
+            }
+          }
+          cursor.setDate(cursor.getDate() + 1);
+          seguranca += 1;
+        }
+
+        if (datasProducao.length === 0) {
+          const diasFallback = obterDiasProducaoNecessarios(processo);
+          datasProducao = adicionarDiasUteis(dataInicioPreferida, diasFallback);
+          const valorFallback =
+            datasProducao.length > 0
+              ? valorTotalProcesso / datasProducao.length
+              : 0;
+          for (const dataFallback of datasProducao) {
+            valorProducaoPorDia[dataFallback] = valorFallback;
+            cargaProducaoPorDia[dataFallback] =
+              (cargaProducaoPorDia[dataFallback] || 0) + valorFallback;
+          }
+        }
+      }
+
+      const fimProducao = datasProducao[datasProducao.length - 1] || null;
+      const datasAcabamento = calcularAcabamentosSemMexerNaProducao(
+        processo,
+        fimProducao,
+      );
+      const inicioAcabamento = datasAcabamento[0] || null;
       const fimAcabamento = datasAcabamento[datasAcabamento.length - 1] || null;
+      const datasMontagem = temMontagemManual ? datasMontagemManuais : [];
+      const inicioMontagem = datasMontagem[0] || null;
       const fimMontagem = datasMontagem[datasMontagem.length - 1] || null;
-      const dataEntregaCalculada = fimMontagem || processo.data_entrega_prevista || fimAcabamento || fimProducao;
+      const dataEntregaCalculada = fimMontagem || fimAcabamento || fimProducao;
+      const temAcabamentoManual =
+        !!processo.data_inicio_acabamento_manual ||
+        !!processo.data_fim_acabamento_manual ||
+        (!!processo.data_inicio_montagem_manual &&
+          obterDiasAcabamentoNecessarios(processo) > 0);
 
       resultado.push({
         processo,
-        datasProducao: producao.datasProducao,
+        datasProducao,
         datasAcabamento,
         datasMontagem,
-        valorProducaoPorDia: producao.valorProducaoPorDia,
-        inicioProducao: producao.datasProducao[0] || null,
+        valorProducaoPorDia,
+        inicioProducao: datasProducao[0] || null,
         fimProducao,
-        inicioAcabamento: datasAcabamento[0] || null,
+        inicioAcabamento,
         fimAcabamento,
-        inicioMontagem: datasMontagem[0] || null,
+        inicioMontagem,
         fimMontagem,
         dataEntregaCalculada,
         temDatasManuais:
-          temProducaoManual ||
-          !!processo.data_inicio_acabamento_manual ||
-          !!processo.data_fim_acabamento_manual ||
-          !!processo.data_inicio_montagem_manual ||
-          !!processo.data_fim_montagem_manual,
+          temProducaoManual || temAcabamentoManual || temMontagemManual,
       });
     }
 
     return resultado;
   }
 
-  const planeamentos = useMemo(() => {
-    return calcularPlaneamentos(processosFiltradosPorArquivo);
-  }, [processosFiltradosPorArquivo, resumo.objetivoDiario, bloqueios]);
+  const planeamentos = useMemo<PlaneamentoProcesso[]>(
+    () => calcularPlaneamentos(processosFiltradosPorArquivo),
+    [processosFiltradosPorArquivo, resumo.objetivoDiario, bloqueios],
+  );
 
   const planeamentosVisiveis = useMemo(() => {
-    const ids = new Set(processosVisiveis.map((p) => p.id));
-    return planeamentos.filter((p) => ids.has(p.processo.id));
+    const idsVisiveis = new Set(
+      processosVisiveis.map((processo) => processo.id),
+    );
+    return planeamentos.filter((item) => idsVisiveis.has(item.processo.id));
   }, [planeamentos, processosVisiveis]);
+
+  const valorOcupadoMes = useMemo(() => {
+    const ano = mesAtual.getFullYear();
+    const mes = mesAtual.getMonth();
+    let total = 0;
+    for (const planeamento of planeamentosVisiveis) {
+      for (const [dataISO, valor] of Object.entries(
+        planeamento.valorProducaoPorDia,
+      )) {
+        const data = parseDateOnly(dataISO);
+        if (data.getFullYear() === ano && data.getMonth() === mes)
+          total += Number(valor || 0);
+      }
+    }
+    return total;
+  }, [planeamentosVisiveis, mesAtual]);
+
+  const percentagemMesOcupado =
+    resumo.objetivoMensal > 0
+      ? (valorOcupadoMes / resumo.objetivoMensal) * 100
+      : 0;
 
   const alertas = useMemo<AlertaPlaneamento[]>(() => {
     const lista: AlertaPlaneamento[] = [];
-
-    for (const item of planeamentosVisiveis) {
-      if (item.processo.calendario_arquivado) continue;
-      const nome = `${item.processo.codigo_val || "Sem VAL"} · ${item.processo.nome_obra || "Sem nome"}`;
+    for (const planeamento of planeamentosVisiveis) {
+      if (planeamento.processo.calendario_arquivado) continue;
+      const obra = planeamento.processo.nome_obra || "Sem nome";
+      const val = planeamento.processo.codigo_val || "Sem VAL";
+      const nome = `${val} · ${obra}`;
       const eventos = [
-        { titulo: "Começar produção", texto: `${nome} deve começar produção.`, data: item.inicioProducao },
-        { titulo: "Produção a terminar", texto: `${nome} termina produção.`, data: item.fimProducao },
-        { titulo: "Entra em acabamentos", texto: `${nome} entra em acabamentos.`, data: item.inicioAcabamento },
-        { titulo: "Sai de acabamentos", texto: `${nome} sai de acabamentos.`, data: item.fimAcabamento },
-        { titulo: "Começar montagem", texto: `${nome} deve começar montagem.`, data: item.inicioMontagem },
-        { titulo: "Pronto para entrega", texto: `${nome} fica pronto para entrega.`, data: item.dataEntregaCalculada },
+        {
+          titulo: "Começar produção",
+          texto: `${nome} deve começar produção.`,
+          data: planeamento.inicioProducao,
+        },
+        {
+          titulo: "Produção a terminar",
+          texto: `${nome} termina produção.`,
+          data: planeamento.fimProducao,
+        },
+        {
+          titulo: "Entra em acabamentos",
+          texto: `${nome} entra em acabamentos.`,
+          data: planeamento.inicioAcabamento,
+        },
+        {
+          titulo: "Sai de acabamentos",
+          texto: `${nome} sai de acabamentos.`,
+          data: planeamento.fimAcabamento,
+        },
+        {
+          titulo: "Começar montagem",
+          texto: `${nome} deve começar montagem.`,
+          data: planeamento.inicioMontagem,
+        },
+        {
+          titulo: "Montagem a terminar",
+          texto: `${nome} termina montagem.`,
+          data: planeamento.fimMontagem,
+        },
+        {
+          titulo: "Pronto para entrega",
+          texto: `${nome} fica pronto para entrega.`,
+          data: planeamento.dataEntregaCalculada,
+        },
       ];
-
       for (const evento of eventos) {
         if (!evento.data) continue;
         const diasAte = diferencaDias(evento.data);
         if (diasAte < 0 || diasAte > 10) continue;
         lista.push({
-          id: `${item.processo.id}-${evento.titulo}-${evento.data}`,
+          id: `${planeamento.processo.id}-${evento.titulo}-${evento.data}`,
           titulo: evento.titulo,
           texto: evento.texto,
           data: evento.data,
           diasAte,
           nivel: diasAte <= 1 ? "urgente" : diasAte <= 3 ? "breve" : "normal",
+          processo: planeamento.processo,
         });
       }
     }
-
     return lista.sort((a, b) => a.diasAte - b.diasAte);
   }, [planeamentosVisiveis]);
 
@@ -833,9 +950,12 @@ export default function AdminCalendarioPage() {
   function obterPlaneamentosDoDia(data: Date) {
     const chave = formatarDataISO(data);
     return planeamentosVisiveis.filter((item) => {
-      if (item.processo.calendario_arquivado && filtroArquivo === "ativas") return false;
-      if (tipoCalendario === "producao") return item.datasProducao.includes(chave);
-      if (tipoCalendario === "acabamentos") return item.datasAcabamento.includes(chave);
+      if (item.processo.calendario_arquivado && filtroArquivo === "ativas")
+        return false;
+      if (tipoCalendario === "producao")
+        return item.datasProducao.includes(chave);
+      if (tipoCalendario === "acabamentos")
+        return item.datasAcabamento.includes(chave);
       return item.datasMontagem.includes(chave);
     });
   }
@@ -855,9 +975,12 @@ export default function AdminCalendarioPage() {
     if (tipoCalendario !== "producao") return 0;
     if (eBloqueioManual(data)) return 0;
     if (eFimDeSemana(data) && !eDesbloqueioFimSemana(bloqueio)) return 0;
-
     const chave = formatarDataISO(data);
-    return planeamentosVisiveis.reduce((acc, item) => acc + Number(item.valorProducaoPorDia[chave] || 0), 0);
+    return planeamentosVisiveis.reduce(
+      (acc, planeamento) =>
+        acc + Number(planeamento.valorProducaoPorDia[chave] || 0),
+      0,
+    );
   }
 
   function obterDiasFinanceirosDoDia(data: Date) {
@@ -865,40 +988,73 @@ export default function AdminCalendarioPage() {
     return obterValorPrevistoDoDia(data) / resumo.objetivoDiario;
   }
 
-  function obterEstiloFinanceiroDia(valorDia: number) {
-    if (tipoCalendario === "acabamentos") return { fundo: "rgba(66,133,244,0.14)", borda: "rgba(66,133,244,0.35)", texto: "#9fc3ff" };
-    if (tipoCalendario === "montagens") return { fundo: "rgba(156,39,176,0.14)", borda: "rgba(186,104,200,0.45)", texto: "#e1bee7" };
-    if (!resumo.objetivoDiario || resumo.objetivoDiario <= 0) return { fundo: "rgba(255,255,255,0.06)", borda: "rgba(255,255,255,0.10)", texto: "white" };
-
-    const percentagem = valorDia / resumo.objetivoDiario;
-    if (percentagem >= 0.995) return { fundo: "rgba(52,168,83,0.20)", borda: "rgba(52,168,83,0.55)", texto: "#9df5b4" };
-    if (percentagem >= 0.75) return { fundo: "rgba(244,180,0,0.18)", borda: "rgba(244,180,0,0.50)", texto: "#ffd76c" };
-    return { fundo: "rgba(234,67,53,0.16)", borda: "rgba(234,67,53,0.50)", texto: "#ff9d9d" };
+  function obterEstiloFinanceiroDia(valorDia: number, objetivoDiario: number) {
+    if (tipoCalendario === "acabamentos")
+      return {
+        fundo: "rgba(66,133,244,0.14)",
+        borda: "rgba(66,133,244,0.35)",
+        texto: "#9fc3ff",
+      };
+    if (tipoCalendario === "montagens")
+      return {
+        fundo: "rgba(156,39,176,0.14)",
+        borda: "rgba(186,104,200,0.45)",
+        texto: "#e1bee7",
+      };
+    if (!objetivoDiario || objetivoDiario <= 0)
+      return {
+        fundo: "rgba(255,255,255,0.06)",
+        borda: "rgba(255,255,255,0.10)",
+        texto: "white",
+      };
+    const percentagem = valorDia / objetivoDiario;
+    if (percentagem >= 0.995)
+      return {
+        fundo: "rgba(52,168,83,0.20)",
+        borda: "rgba(52,168,83,0.55)",
+        texto: "#9df5b4",
+      };
+    if (percentagem >= 0.75)
+      return {
+        fundo: "rgba(244,180,0,0.18)",
+        borda: "rgba(244,180,0,0.50)",
+        texto: "#ffd76c",
+      };
+    return {
+      fundo: "rgba(234,67,53,0.16)",
+      borda: "rgba(234,67,53,0.50)",
+      texto: "#ff9d9d",
+    };
   }
 
-  function obterCoresEvento() {
-    if (tipoCalendario === "montagens") return { fundo: "rgba(156,39,176,0.78)", borda: "rgba(186,104,200,1)" };
-    if (tipoCalendario === "acabamentos") return { fundo: "rgba(66,133,244,0.78)", borda: "rgba(66,133,244,1)" };
-    return { fundo: "rgba(52,168,83,0.88)", borda: "rgba(52,168,83,1)" };
+  function obterCoresEstado(estado: string | null) {
+    if (tipoCalendario === "montagens")
+      return { fundo: "rgba(156,39,176,0.78)", borda: "rgba(186,104,200,1)" };
+    if (tipoCalendario === "acabamentos")
+      return { fundo: "rgba(66,133,244,0.78)", borda: "rgba(66,133,244,1)" };
+    if (estado === "Validado")
+      return { fundo: "rgba(52,168,83,0.88)", borda: "rgba(52,168,83,1)" };
+    return { fundo: "rgba(127,140,141,0.82)", borda: "rgba(127,140,141,1)" };
   }
 
   function obterEstiloAlerta(nivel: AlertaPlaneamento["nivel"]) {
-    if (nivel === "urgente") return { background: "rgba(234,67,53,0.18)", border: "1px solid rgba(234,67,53,0.45)", color: "#ffb0b0" };
-    if (nivel === "breve") return { background: "rgba(244,180,0,0.16)", border: "1px solid rgba(244,180,0,0.40)", color: "#ffd76c" };
-    return { background: "rgba(66,133,244,0.14)", border: "1px solid rgba(66,133,244,0.35)", color: "#9fc3ff" };
-  }
-
-  function irMesAnterior() {
-    setMesAtual((anterior) => new Date(anterior.getFullYear(), anterior.getMonth() - 1, 1));
-  }
-
-  function irMesSeguinte() {
-    setMesAtual((anterior) => new Date(anterior.getFullYear(), anterior.getMonth() + 1, 1));
-  }
-
-  function irHoje() {
-    const hoje = new Date();
-    setMesAtual(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    if (nivel === "urgente")
+      return {
+        background: "rgba(234,67,53,0.18)",
+        border: "1px solid rgba(234,67,53,0.45)",
+        color: "#ffb0b0",
+      };
+    if (nivel === "breve")
+      return {
+        background: "rgba(244,180,0,0.16)",
+        border: "1px solid rgba(244,180,0,0.40)",
+        color: "#ffd76c",
+      };
+    return {
+      background: "rgba(66,133,244,0.14)",
+      border: "1px solid rgba(66,133,244,0.35)",
+      color: "#9fc3ff",
+    };
   }
 
   function limparFiltros() {
@@ -907,10 +1063,33 @@ export default function AdminCalendarioPage() {
     setFiltroArquivo("ativas");
   }
 
+  function irMesAnterior() {
+    setMesAtual(
+      (anterior) =>
+        new Date(anterior.getFullYear(), anterior.getMonth() - 1, 1),
+    );
+  }
+
+  function irMesSeguinte() {
+    setMesAtual(
+      (anterior) =>
+        new Date(anterior.getFullYear(), anterior.getMonth() + 1, 1),
+    );
+  }
+
+  function irHoje() {
+    const hoje = new Date();
+    setMesAtual(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  }
+
   function abrirModalBloqueio(data: Date) {
     const bloqueioExistente = obterBloqueioDoDia(data);
     setDiaSelecionado(data);
-    setMotivoBloqueio(bloqueioExistente?.motivo === DESBLOQUEIO_FIM_SEMANA ? "" : bloqueioExistente?.motivo || "");
+    setMotivoBloqueio(
+      bloqueioExistente?.motivo === DESBLOQUEIO_FIM_SEMANA
+        ? ""
+        : bloqueioExistente?.motivo || "",
+    );
   }
 
   function fecharModalBloqueio() {
@@ -922,25 +1101,90 @@ export default function AdminCalendarioPage() {
     setCartoesAbertos((prev) => ({ ...prev, [processoId]: !prev[processoId] }));
   }
 
-  function normalizarDatasAntesDeGuardar(processo: ProcessoCalendario, valoresOriginais: DatasManuaisEdit) {
+  async function guardarContactos(processo: ProcessoCalendario) {
+    try {
+      setProcessoAGuardarContactos(processo.id);
+      setMensagem("");
+      const valores = contactosEdit[processo.id];
+      const payload = {
+        responsavel_obra_nome: valores?.responsavel_obra_nome?.trim() || null,
+        responsavel_obra_email: valores?.responsavel_obra_email?.trim() || null,
+        responsavel_acabamentos_nome:
+          valores?.responsavel_acabamentos_nome?.trim() || null,
+        responsavel_acabamentos_email:
+          valores?.responsavel_acabamentos_email?.trim() || null,
+        responsavel_montagem_nome:
+          valores?.responsavel_montagem_nome?.trim() || null,
+        responsavel_montagem_email:
+          valores?.responsavel_montagem_email?.trim() || null,
+        admin_alerta_email: valores?.admin_alerta_email?.trim() || null,
+      };
+      const { error } = await supabase
+        .from("processos")
+        .update(payload)
+        .eq("id", processo.id);
+      if (error) throw error;
+      setProcessos((prev) =>
+        prev.map((item) =>
+          item.id === processo.id ? { ...item, ...payload } : item,
+        ),
+      );
+      setMensagem("Responsáveis e emails guardados com sucesso.");
+    } catch (error: any) {
+      console.error(error);
+      setMensagem(error?.message || "Erro ao guardar responsáveis e emails.");
+    } finally {
+      setProcessoAGuardarContactos(null);
+    }
+  }
+
+  function normalizarDatasAntesDeGuardar(
+    processo: ProcessoCalendario,
+    valoresOriginais: DatasManuaisEdit,
+  ) {
     const valores: DatasManuaisEdit = { ...valoresOriginais };
-    const diasAcabamento = Number(diasAcabamentoEdit[processo.id] || processo.dias_acabamento_previstos || 0);
+    const diasAcabamento = Number(
+      diasAcabamentoEdit[processo.id] ||
+        processo.dias_acabamento_previstos ||
+        0,
+    );
 
     if (diasAcabamento > 0) {
-      if (!valores.data_inicio_acabamento_manual && valores.data_fim_acabamento_manual) {
-        const datas = subtrairDiasUteisAteFim(parseDateOnly(valores.data_fim_acabamento_manual), diasAcabamento);
+      if (
+        !valores.data_inicio_acabamento_manual &&
+        valores.data_fim_acabamento_manual
+      ) {
+        const datas = subtrairDiasUteisAteFim(
+          parseDateOnly(valores.data_fim_acabamento_manual),
+          diasAcabamento,
+        );
         valores.data_inicio_acabamento_manual = datas[0] || "";
       }
 
-      if (!valores.data_inicio_acabamento_manual && !valores.data_fim_acabamento_manual && valores.data_inicio_montagem_manual) {
-        const fimAntesMontagem = diaUtilAnterior(parseDateOnly(valores.data_inicio_montagem_manual));
-        const datas = subtrairDiasUteisAteFim(fimAntesMontagem, diasAcabamento);
+      if (
+        !valores.data_inicio_acabamento_manual &&
+        !valores.data_fim_acabamento_manual &&
+        valores.data_inicio_montagem_manual
+      ) {
+        const fimAcabamentoAntesMontagem = diaUtilAnterior(
+          parseDateOnly(valores.data_inicio_montagem_manual),
+        );
+        const datas = subtrairDiasUteisAteFim(
+          fimAcabamentoAntesMontagem,
+          diasAcabamento,
+        );
         valores.data_inicio_acabamento_manual = datas[0] || "";
         valores.data_fim_acabamento_manual = datas[datas.length - 1] || "";
       }
 
-      if (valores.data_inicio_acabamento_manual && !valores.data_fim_acabamento_manual) {
-        const datas = adicionarDiasUteis(parseDateOnly(valores.data_inicio_acabamento_manual), diasAcabamento);
+      if (
+        valores.data_inicio_acabamento_manual &&
+        !valores.data_fim_acabamento_manual
+      ) {
+        const datas = adicionarDiasUteis(
+          parseDateOnly(valores.data_inicio_acabamento_manual),
+          diasAcabamento,
+        );
         valores.data_fim_acabamento_manual = datas[datas.length - 1] || "";
       }
     }
@@ -952,49 +1196,92 @@ export default function AdminCalendarioPage() {
     try {
       setProcessoAGuardarDatas(processo.id);
       setMensagem("");
-
-      const valores = normalizarDatasAntesDeGuardar(processo, datasManuaisEdit[processo.id]);
+      const valoresOriginais = datasManuaisEdit[processo.id];
+      const valores = normalizarDatasAntesDeGuardar(processo, valoresOriginais);
       const payload = {
-        data_inicio_producao_manual: valores.data_inicio_producao_manual || null,
-        data_fim_producao_manual: valores.data_fim_producao_manual || null,
-        data_inicio_acabamento_manual: valores.data_inicio_acabamento_manual || null,
-        data_fim_acabamento_manual: valores.data_fim_acabamento_manual || null,
-        data_inicio_montagem_manual: valores.data_inicio_montagem_manual || null,
-        data_fim_montagem_manual: valores.data_fim_montagem_manual || null,
+        data_inicio_producao_manual:
+          valores?.data_inicio_producao_manual || null,
+        data_fim_producao_manual: valores?.data_fim_producao_manual || null,
+        data_inicio_acabamento_manual:
+          valores?.data_inicio_acabamento_manual || null,
+        data_fim_acabamento_manual: valores?.data_fim_acabamento_manual || null,
+        data_inicio_montagem_manual:
+          valores?.data_inicio_montagem_manual || null,
+        data_fim_montagem_manual: valores?.data_fim_montagem_manual || null,
       };
 
-      if (payload.data_inicio_producao_manual && payload.data_fim_producao_manual && payload.data_inicio_producao_manual > payload.data_fim_producao_manual) {
-        setMensagem("A data de início da produção não pode ser depois da data de fim.");
+      if (
+        payload.data_inicio_producao_manual &&
+        payload.data_fim_producao_manual &&
+        payload.data_inicio_producao_manual > payload.data_fim_producao_manual
+      ) {
+        setMensagem(
+          "A data de início da produção não pode ser depois da data de fim.",
+        );
+        return;
+      }
+      if (
+        payload.data_inicio_acabamento_manual &&
+        payload.data_fim_acabamento_manual &&
+        payload.data_inicio_acabamento_manual >
+          payload.data_fim_acabamento_manual
+      ) {
+        setMensagem(
+          "A data de início de acabamentos não pode ser depois da data de fim.",
+        );
+        return;
+      }
+      if (
+        payload.data_inicio_montagem_manual &&
+        payload.data_fim_montagem_manual &&
+        payload.data_inicio_montagem_manual > payload.data_fim_montagem_manual
+      ) {
+        setMensagem(
+          "A data de início de montagem não pode ser depois da data de fim.",
+        );
+        return;
+      }
+      if (
+        payload.data_fim_acabamento_manual &&
+        payload.data_inicio_montagem_manual &&
+        payload.data_inicio_montagem_manual <=
+          payload.data_fim_acabamento_manual
+      ) {
+        setMensagem(
+          "A montagem tem de começar depois dos acabamentos terminarem.",
+        );
         return;
       }
 
-      if (payload.data_inicio_acabamento_manual && payload.data_fim_acabamento_manual && payload.data_inicio_acabamento_manual > payload.data_fim_acabamento_manual) {
-        setMensagem("A data de início de acabamentos não pode ser depois da data de fim.");
-        return;
-      }
-
-      if (payload.data_inicio_montagem_manual && payload.data_fim_montagem_manual && payload.data_inicio_montagem_manual > payload.data_fim_montagem_manual) {
-        setMensagem("A data de início de montagem não pode ser depois da data de fim.");
-        return;
-      }
-
-      const processoAtualizado: ProcessoCalendario = { ...processo, ...payload };
+      const processoAtualizado: ProcessoCalendario = {
+        ...processo,
+        ...payload,
+      };
       const planeamentoAtualizado = calcularPlaneamentos(
-        processosFiltradosPorArquivo.map((item) => (item.id === processo.id ? processoAtualizado : item))
+        processosFiltradosPorArquivo.map((item) =>
+          item.id === processo.id ? processoAtualizado : item,
+        ),
       ).find((item) => item.processo.id === processo.id);
-
       const payloadFinal = {
         ...payload,
-        data_inicio_prevista: payload.data_inicio_producao_manual || processo.data_inicio_prevista,
-        data_entrega_prevista: planeamentoAtualizado?.dataEntregaCalculada || processo.data_entrega_prevista,
+        data_inicio_prevista:
+          payload.data_inicio_producao_manual || processo.data_inicio_prevista,
+        data_entrega_prevista:
+          planeamentoAtualizado?.dataEntregaCalculada ||
+          processo.data_entrega_prevista,
       };
-
-      const { error } = await supabase.from("processos").update(payloadFinal).eq("id", processo.id);
+      const { error } = await supabase
+        .from("processos")
+        .update(payloadFinal)
+        .eq("id", processo.id);
       if (error) throw error;
-
       setDatasManuaisEdit((prev) => ({ ...prev, [processo.id]: valores }));
-      setProcessos((prev) => prev.map((item) => (item.id === processo.id ? { ...item, ...payloadFinal } : item)));
-      setMensagem("Datas manuais guardadas e planeamento recalculado.");
+      setProcessos((prev) =>
+        prev.map((item) =>
+          item.id === processo.id ? { ...item, ...payloadFinal } : item,
+        ),
+      );
+      setMensagem("Datas manuais guardadas e entrega recalculada.");
     } catch (error: any) {
       console.error(error);
       setMensagem(error?.message || "Erro ao guardar datas manuais.");
@@ -1007,7 +1294,6 @@ export default function AdminCalendarioPage() {
     try {
       setProcessoAGuardarDatas(processo.id);
       setMensagem("");
-
       const payload = {
         data_inicio_producao_manual: null,
         data_fim_producao_manual: null,
@@ -1016,10 +1302,26 @@ export default function AdminCalendarioPage() {
         data_inicio_montagem_manual: null,
         data_fim_montagem_manual: null,
       };
-
-      const { error } = await supabase.from("processos").update(payload).eq("id", processo.id);
+      const processoAtualizado: ProcessoCalendario = {
+        ...processo,
+        ...payload,
+      };
+      const planeamentoAtualizado = calcularPlaneamentos(
+        processosFiltradosPorArquivo.map((item) =>
+          item.id === processo.id ? processoAtualizado : item,
+        ),
+      ).find((item) => item.processo.id === processo.id);
+      const payloadFinal = {
+        ...payload,
+        data_entrega_prevista:
+          planeamentoAtualizado?.dataEntregaCalculada ||
+          processo.data_entrega_prevista,
+      };
+      const { error } = await supabase
+        .from("processos")
+        .update(payloadFinal)
+        .eq("id", processo.id);
       if (error) throw error;
-
       setDatasManuaisEdit((prev) => ({
         ...prev,
         [processo.id]: {
@@ -1031,9 +1333,14 @@ export default function AdminCalendarioPage() {
           data_fim_montagem_manual: "",
         },
       }));
-
-      setProcessos((prev) => prev.map((item) => (item.id === processo.id ? { ...item, ...payload } : item)));
-      setMensagem("Datas manuais removidas.");
+      setProcessos((prev) =>
+        prev.map((item) =>
+          item.id === processo.id ? { ...item, ...payloadFinal } : item,
+        ),
+      );
+      setMensagem(
+        "Datas manuais removidas. A obra voltou ao planeamento automático.",
+      );
     } catch (error: any) {
       console.error(error);
       setMensagem(error?.message || "Erro ao limpar datas manuais.");
@@ -1046,41 +1353,74 @@ export default function AdminCalendarioPage() {
     try {
       setProcessoAGuardarAcabamento(processo.id);
       setMensagem("");
-
       const valorTexto = (diasAcabamentoEdit[processo.id] || "").trim();
-      const diasAcabamento = valorTexto === "" ? 0 : Number(valorTexto.replace(",", "."));
-
-      if (Number.isNaN(diasAcabamento) || diasAcabamento < 0 || !Number.isInteger(diasAcabamento)) {
+      const diasAcabamento =
+        valorTexto === "" ? 0 : Number(valorTexto.replace(",", "."));
+      if (
+        Number.isNaN(diasAcabamento) ||
+        diasAcabamento < 0 ||
+        !Number.isInteger(diasAcabamento)
+      ) {
         setMensagem("Introduz um número inteiro válido de dias de acabamento.");
         return;
       }
-
-      const processoAtualizado: ProcessoCalendario = { ...processo, dias_acabamento_previstos: diasAcabamento };
-      const planeamentoAtualizado = calcularPlaneamentos(
-        processosFiltradosPorArquivo.map((item) => (item.id === processo.id ? processoAtualizado : item))
-      ).find((item) => item.processo.id === processo.id);
-
+      const diasFabrico = Number(processo.dias_fabrico_previstos || 0);
+      const diasMontagem = Number(processo.dias_montagem_previstos || 0);
+      const diasTotais =
+        diasFabrico + diasAcabamento + diasMontagem > 0
+          ? diasFabrico + diasAcabamento + diasMontagem
+          : diasAcabamento;
+      const processoAtualizado: ProcessoCalendario = {
+        ...processo,
+        dias_acabamento_previstos: diasAcabamento,
+        dias_totais_previstos: diasTotais,
+      };
+      const listaAtualizada = processosFiltradosPorArquivo.map((item) =>
+        item.id === processo.id ? processoAtualizado : item,
+      );
+      const planeamentoAtualizado = calcularPlaneamentos(listaAtualizada).find(
+        (item) => item.processo.id === processo.id,
+      );
       const payload = {
         dias_acabamento_previstos: diasAcabamento,
-        data_inicio_acabamento_manual: planeamentoAtualizado?.inicioAcabamento || null,
-        data_fim_acabamento_manual: planeamentoAtualizado?.fimAcabamento || null,
-        data_entrega_prevista: planeamentoAtualizado?.dataEntregaCalculada || processo.data_entrega_prevista,
+        dias_totais_previstos: diasTotais,
+        data_inicio_acabamento_manual:
+          planeamentoAtualizado?.inicioAcabamento ||
+          processo.data_inicio_acabamento_manual,
+        data_fim_acabamento_manual:
+          planeamentoAtualizado?.fimAcabamento ||
+          processo.data_fim_acabamento_manual,
+        data_entrega_prevista:
+          planeamentoAtualizado?.dataEntregaCalculada ||
+          processo.data_entrega_prevista,
       };
-
-      const { error } = await supabase.from("processos").update(payload).eq("id", processo.id);
+      const { error } = await supabase
+        .from("processos")
+        .update(payload)
+        .eq("id", processo.id);
       if (error) throw error;
-
       setDatasManuaisEdit((prev) => ({
         ...prev,
         [processo.id]: {
           ...prev[processo.id],
-          data_inicio_acabamento_manual: planeamentoAtualizado?.inicioAcabamento || "",
-          data_fim_acabamento_manual: planeamentoAtualizado?.fimAcabamento || "",
+          data_inicio_acabamento_manual:
+            planeamentoAtualizado?.inicioAcabamento ||
+            prev[processo.id]?.data_inicio_acabamento_manual ||
+            "",
+          data_fim_acabamento_manual:
+            planeamentoAtualizado?.fimAcabamento ||
+            prev[processo.id]?.data_fim_acabamento_manual ||
+            "",
         },
       }));
-
-      setProcessos((prev) => prev.map((item) => (item.id === processo.id ? { ...item, ...payload } : item)));
-      setMensagem("Dias de acabamento guardados e datas ajustadas.");
+      setProcessos((prev) =>
+        prev.map((item) =>
+          item.id === processo.id ? { ...item, ...payload } : item,
+        ),
+      );
+      setMensagem(
+        "Dias de acabamento guardados e datas ajustadas sem mexer na produção.",
+      );
     } catch (error: any) {
       console.error(error);
       setMensagem(error?.message || "Erro ao guardar dias de acabamento.");
@@ -1089,30 +1429,35 @@ export default function AdminCalendarioPage() {
     }
   }
 
-  async function guardarContactos(processo: ProcessoCalendario) {
+  async function arquivarOuRestaurarProcesso(
+    processo: ProcessoCalendario,
+    arquivar: boolean,
+  ) {
     try {
-      setProcessoAGuardarContactos(processo.id);
+      setProcessoAArquivar(processo.id);
       setMensagem("");
-      const valores = contactosEdit[processo.id];
-      const payload = {
-        responsavel_obra_nome: valores?.responsavel_obra_nome?.trim() || null,
-        responsavel_obra_email: valores?.responsavel_obra_email?.trim() || null,
-        responsavel_acabamentos_nome: valores?.responsavel_acabamentos_nome?.trim() || null,
-        responsavel_acabamentos_email: valores?.responsavel_acabamentos_email?.trim() || null,
-        responsavel_montagem_nome: valores?.responsavel_montagem_nome?.trim() || null,
-        responsavel_montagem_email: valores?.responsavel_montagem_email?.trim() || null,
-        admin_alerta_email: valores?.admin_alerta_email?.trim() || null,
-      };
-
-      const { error } = await supabase.from("processos").update(payload).eq("id", processo.id);
+      const { error } = await supabase
+        .from("processos")
+        .update({ calendario_arquivado: arquivar })
+        .eq("id", processo.id);
       if (error) throw error;
-      setProcessos((prev) => prev.map((item) => (item.id === processo.id ? { ...item, ...payload } : item)));
-      setMensagem("Responsáveis e emails guardados com sucesso.");
+      setProcessos((prev) =>
+        prev.map((item) =>
+          item.id === processo.id
+            ? { ...item, calendario_arquivado: arquivar }
+            : item,
+        ),
+      );
+      setMensagem(
+        arquivar
+          ? "Obra arquivada. Saiu da vista de ativas, mas continua guardada."
+          : "Obra restaurada. Voltou à vista de ativas.",
+      );
     } catch (error: any) {
       console.error(error);
-      setMensagem(error?.message || "Erro ao guardar responsáveis e emails.");
+      setMensagem(error?.message || "Erro ao alterar arquivo da obra.");
     } finally {
-      setProcessoAGuardarContactos(null);
+      setProcessoAArquivar(null);
     }
   }
 
@@ -1125,19 +1470,18 @@ export default function AdminCalendarioPage() {
         setMensagem("Não encontrei planeamento para esta obra.");
         return;
       }
-
       const emails = [
         processo.responsavel_obra_email,
         processo.responsavel_acabamentos_email,
         processo.responsavel_montagem_email,
         processo.admin_alerta_email,
-      ].filter(Boolean).map((email) => String(email).trim());
-
+      ]
+        .filter(Boolean)
+        .map((email) => String(email).trim());
       if (emails.length === 0) {
         setMensagem("Adiciona pelo menos um email antes de enviar alertas.");
         return;
       }
-
       const resposta = await fetch("/api/enviar-alerta-planeamento", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1161,9 +1505,9 @@ export default function AdminCalendarioPage() {
           },
         }),
       });
-
       const data = await resposta.json().catch(() => null);
-      if (!resposta.ok) throw new Error(data?.message || "Erro ao enviar email.");
+      if (!resposta.ok)
+        throw new Error(data?.message || "Erro ao enviar email.");
       setMensagem("Email de alerta enviado com sucesso.");
     } catch (error: any) {
       console.error(error);
@@ -1173,100 +1517,18 @@ export default function AdminCalendarioPage() {
     }
   }
 
-  async function arquivarOuRestaurarProcesso(processo: ProcessoCalendario, arquivar: boolean) {
-    try {
-      setProcessoAArquivar(processo.id);
-      setMensagem("");
-      const { error } = await supabase.from("processos").update({ calendario_arquivado: arquivar }).eq("id", processo.id);
-      if (error) throw error;
-      setProcessos((prev) => prev.map((item) => (item.id === processo.id ? { ...item, calendario_arquivado: arquivar } : item)));
-      setMensagem(arquivar ? "Obra arquivada." : "Obra restaurada.");
-    } catch (error: any) {
-      console.error(error);
-      setMensagem(error?.message || "Erro ao alterar arquivo da obra.");
-    } finally {
-      setProcessoAArquivar(null);
-    }
-  }
-
-  async function guardarMetaMensal() {
-    try {
-      setAGuardarMeta(true);
-      setMensagem("");
-      const valorNumero = Number(metaMensalEdit.trim().replace(",", "."));
-      if (!metaMensalEdit.trim() || Number.isNaN(valorNumero) || valorNumero <= 0) {
-        setMensagem("Introduz uma meta mensal válida.");
-        return;
-      }
-
-      const ano = mesAtual.getFullYear();
-      const mesNumero = mesAtual.getMonth() + 1;
-      const diasUteisMes = contarDiasUteisMes(ano, mesAtual.getMonth());
-      const { error } = await supabase.from("metas_faturacao").upsert(
-        { ano, mes: mesNumero, objetivo_mensal: valorNumero, dias_uteis: diasUteisMes },
-        { onConflict: "ano,mes" }
-      );
-
-      if (error) throw error;
-      setMensagem("Meta mensal guardada com sucesso.");
-      await carregarDados();
-    } catch (error: any) {
-      console.error(error);
-      setMensagem(error?.message || "Erro ao guardar meta mensal.");
-    } finally {
-      setAGuardarMeta(false);
-    }
-  }
-
-  async function guardarBloqueio() {
-    if (!diaSelecionado) return;
-    try {
-      setAGuardarBloqueio(true);
-      setMensagem("");
-      const data = formatarDataISO(diaSelecionado);
-      const { error } = await supabase.from("bloqueios_calendario").upsert(
-        { data, motivo: motivoBloqueio.trim() || "Dia bloqueado manualmente" },
-        { onConflict: "data" }
-      );
-      if (error) throw error;
-      setMensagem("Dia bloqueado com sucesso.");
-      fecharModalBloqueio();
-      await carregarDados();
-    } catch (error: any) {
-      console.error(error);
-      setMensagem(error?.message || "Erro ao bloquear dia.");
-    } finally {
-      setAGuardarBloqueio(false);
-    }
-  }
-
-  async function removerBloqueio() {
-    if (!diaSelecionado) return;
-    try {
-      setARemoverBloqueio(true);
-      setMensagem("");
-      const { error } = await supabase.from("bloqueios_calendario").delete().eq("data", formatarDataISO(diaSelecionado));
-      if (error) throw error;
-      setMensagem("Bloqueio removido com sucesso.");
-      fecharModalBloqueio();
-      await carregarDados();
-    } catch (error: any) {
-      console.error(error);
-      setMensagem(error?.message || "Erro ao remover bloqueio.");
-    } finally {
-      setARemoverBloqueio(false);
-    }
-  }
-
   async function desbloquearFimSemana() {
     if (!diaSelecionado) return;
     try {
       setAGuardarBloqueio(true);
       setMensagem("");
-      const { error } = await supabase.from("bloqueios_calendario").upsert(
-        { data: formatarDataISO(diaSelecionado), motivo: DESBLOQUEIO_FIM_SEMANA },
-        { onConflict: "data" }
-      );
+      const data = formatarDataISO(diaSelecionado);
+      const { error } = await supabase
+        .from("bloqueios_calendario")
+        .upsert(
+          { data, motivo: DESBLOQUEIO_FIM_SEMANA },
+          { onConflict: "data" },
+        );
       if (error) throw error;
       setMensagem("Fim de semana desbloqueado com sucesso.");
       fecharModalBloqueio();
@@ -1284,10 +1546,11 @@ export default function AdminCalendarioPage() {
     try {
       setARemoverBloqueio(true);
       setMensagem("");
+      const data = formatarDataISO(diaSelecionado);
       const { error } = await supabase
         .from("bloqueios_calendario")
         .delete()
-        .eq("data", formatarDataISO(diaSelecionado))
+        .eq("data", data)
         .eq("motivo", DESBLOQUEIO_FIM_SEMANA);
       if (error) throw error;
       setMensagem("Fim de semana voltou a ficar bloqueado.");
@@ -1301,12 +1564,106 @@ export default function AdminCalendarioPage() {
     }
   }
 
-  const processosDiaSelecionado = diaSelecionado ? obterProcessosDoDia(diaSelecionado) : [];
-  const bloqueioDiaSelecionado = diaSelecionado ? obterBloqueioDoDia(diaSelecionado) : null;
-  const valorDiaSelecionado = diaSelecionado ? obterValorPrevistoDoDia(diaSelecionado) : 0;
-  const diasFinanceirosDiaSelecionado = diaSelecionado ? obterDiasFinanceirosDoDia(diaSelecionado) : 0;
-  const diaSelecionadoFimSemana = diaSelecionado ? eFimDeSemana(diaSelecionado) : false;
-  const diaSelecionadoFimSemanaDesbloqueado = eDesbloqueioFimSemana(bloqueioDiaSelecionado);
+  async function guardarBloqueio() {
+    if (!diaSelecionado) return;
+    try {
+      setAGuardarBloqueio(true);
+      setMensagem("");
+      const data = formatarDataISO(diaSelecionado);
+      const { error } = await supabase
+        .from("bloqueios_calendario")
+        .upsert(
+          {
+            data,
+            motivo: motivoBloqueio.trim() || "Dia bloqueado manualmente",
+          },
+          { onConflict: "data" },
+        );
+      if (error) throw new Error(error.message || "Erro ao guardar bloqueio.");
+      setMensagem("Dia bloqueado com sucesso.");
+      fecharModalBloqueio();
+      await carregarDados();
+    } catch (error: any) {
+      console.error("guardarBloqueio:", error);
+      setMensagem(error?.message || "Erro ao bloquear o dia.");
+    } finally {
+      setAGuardarBloqueio(false);
+    }
+  }
+
+  async function removerBloqueio() {
+    if (!diaSelecionado) return;
+    try {
+      setARemoverBloqueio(true);
+      setMensagem("");
+      const data = formatarDataISO(diaSelecionado);
+      const { error } = await supabase
+        .from("bloqueios_calendario")
+        .delete()
+        .eq("data", data);
+      if (error) throw new Error(error.message || "Erro ao remover bloqueio.");
+      setMensagem("Bloqueio removido com sucesso.");
+      fecharModalBloqueio();
+      await carregarDados();
+    } catch (error: any) {
+      console.error("removerBloqueio:", error);
+      setMensagem(error?.message || "Erro ao remover bloqueio.");
+    } finally {
+      setARemoverBloqueio(false);
+    }
+  }
+
+  async function guardarMetaMensal() {
+    try {
+      setAGuardarMeta(true);
+      setMensagem("");
+      const valorTexto = metaMensalEdit.trim().replace(",", ".");
+      const valorNumero = Number(valorTexto);
+      if (!valorTexto || Number.isNaN(valorNumero) || valorNumero <= 0) {
+        setMensagem("Introduz uma meta anual válida.");
+        return;
+      }
+      const ano = mesAtual.getFullYear();
+      const diasUteisAno = contarDiasUteisAno(ano);
+      const { error } = await supabase.from("metas_faturacao").upsert(
+        {
+          ano,
+          mes: MES_META_GLOBAL,
+          objetivo_mensal: valorNumero,
+          dias_uteis: diasUteisAno,
+        },
+        { onConflict: "ano,mes" },
+      );
+      if (error) throw error;
+      setMensagem("Meta anual global guardada com sucesso.");
+      await carregarDados();
+    } catch (error: any) {
+      console.error(error);
+      setMensagem(error?.message || "Erro ao guardar meta anual global.");
+    } finally {
+      setAGuardarMeta(false);
+    }
+  }
+
+  const processosDiaSelecionado = diaSelecionado
+    ? obterProcessosDoDia(diaSelecionado)
+    : [];
+  const bloqueioDiaSelecionado = diaSelecionado
+    ? obterBloqueioDoDia(diaSelecionado)
+    : null;
+  const valorDiaSelecionado = diaSelecionado
+    ? obterValorPrevistoDoDia(diaSelecionado)
+    : 0;
+  const diasFinanceirosDiaSelecionado = diaSelecionado
+    ? obterDiasFinanceirosDoDia(diaSelecionado)
+    : 0;
+  const diaSelecionadoFimSemana = diaSelecionado
+    ? eFimDeSemana(diaSelecionado)
+    : false;
+  const diaSelecionadoFimSemanaDesbloqueado = eDesbloqueioFimSemana(
+    bloqueioDiaSelecionado,
+  );
+  const estilos = obterEstilosResponsivos(eDesktop, eTablet);
 
   if (aVerificar) {
     return (
@@ -1324,81 +1681,239 @@ export default function AdminCalendarioPage() {
       <aside style={estilos.asideStyle}>
         <div style={estilos.logoStyle}>VALERIE</div>
         <div style={estilos.menuContainerStyle}>
-          <a href="/admin" style={estilos.menuStyle}>Dashboard</a>
-          <a href="/admin/processos" style={estilos.menuStyle}>Processos</a>
-          <a href="/admin/clientes" style={estilos.menuStyle}>Clientes</a>
-          <a href="/admin/precos" style={estilos.menuStyle}>Preços</a>
-          <a href="/admin/financeiro" style={estilos.menuStyle}>Financeiro</a>
-          <a href="/admin/calendario" style={{ ...estilos.menuStyle, background: "rgba(255,255,255,0.08)" }}>Calendário</a>
-          <a href="/admin/importar-val" style={estilos.menuStyle}>Importar VAL</a>
-          <a href="/aprovacao-clientes" style={estilos.menuStyle}>Aprovação Clientes</a>
+          <a href="/admin" style={estilos.menuStyle}>
+            Dashboard
+          </a>
+          <a href="/admin/processos" style={estilos.menuStyle}>
+            Processos
+          </a>
+          <a href="/admin/clientes" style={estilos.menuStyle}>
+            Clientes
+          </a>
+          <a href="/admin/precos" style={estilos.menuStyle}>
+            Preços
+          </a>
+          <a href="/admin/financeiro" style={estilos.menuStyle}>
+            Financeiro
+          </a>
+          <a
+            href="/admin/calendario"
+            style={{
+              ...estilos.menuStyle,
+              background: "rgba(255,255,255,0.08)",
+            }}
+          >
+            Calendário
+          </a>
+          <a href="/aprovacao-clientes" style={estilos.menuStyle}>
+            Aprovação Clientes
+          </a>
         </div>
-        <div style={{ marginTop: 16 }}><LogoutButton label="Terminar Sessão" fullWidth /></div>
+        <div style={{ marginTop: "16px" }}>
+          <LogoutButton label="Terminar Sessão" fullWidth />
+        </div>
       </aside>
 
       <section style={estilos.contentStyle}>
         <div style={estilos.heroCardStyle}>
           <div>
             <div style={estilos.heroEyebrowStyle}>Planeamento</div>
-            <h1 style={{ fontSize: eDesktop ? 40 : 28, margin: "6px 0 0 0" }}>Calendário</h1>
-            <p style={estilos.heroTextStyle}>Produção, acabamentos, montagens, responsáveis, datas manuais e alertas num só painel.</p>
+            <h1
+              style={{
+                fontSize: eDesktop ? "40px" : "28px",
+                margin: "6px 0 0 0",
+              }}
+            >
+              Calendário
+            </h1>
+            <p style={estilos.heroTextStyle}>
+              Produção, acabamentos, montagens, responsáveis, datas manuais,
+              arquivo e alertas num só painel.
+            </p>
           </div>
           <div style={estilos.navegacaoStyle}>
-            <button type="button" onClick={irHoje} style={estilos.botaoCalendarioStyle}>Hoje</button>
-            <button type="button" onClick={irMesAnterior} style={estilos.botaoCalendarioStyle}>←</button>
-            <button type="button" onClick={irMesSeguinte} style={estilos.botaoCalendarioStyle}>→</button>
+            <button
+              type="button"
+              onClick={irHoje}
+              style={estilos.botaoCalendarioStyle}
+            >
+              Hoje
+            </button>
+            <button
+              type="button"
+              onClick={irMesAnterior}
+              style={estilos.botaoCalendarioStyle}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onClick={irMesSeguinte}
+              style={estilos.botaoCalendarioStyle}
+            >
+              →
+            </button>
           </div>
         </div>
 
         <div style={estilos.tabsStyle}>
-          <button type="button" onClick={() => setTipoCalendario("producao")} style={{ ...estilos.tabStyle, ...(tipoCalendario === "producao" ? estilos.tabAtivaStyle : {}) }}>Produção</button>
-          <button type="button" onClick={() => setTipoCalendario("acabamentos")} style={{ ...estilos.tabStyle, ...(tipoCalendario === "acabamentos" ? estilos.tabAtivaStyle : {}) }}>Acabamentos</button>
-          <button type="button" onClick={() => setTipoCalendario("montagens")} style={{ ...estilos.tabStyle, ...(tipoCalendario === "montagens" ? estilos.tabAtivaStyle : {}) }}>Montagens</button>
+          <button
+            type="button"
+            onClick={() => setTipoCalendario("producao")}
+            style={{
+              ...estilos.tabStyle,
+              ...(tipoCalendario === "producao" ? estilos.tabAtivaStyle : {}),
+            }}
+          >
+            Produção
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipoCalendario("acabamentos")}
+            style={{
+              ...estilos.tabStyle,
+              ...(tipoCalendario === "acabamentos"
+                ? estilos.tabAtivaStyle
+                : {}),
+            }}
+          >
+            Acabamentos
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipoCalendario("montagens")}
+            style={{
+              ...estilos.tabStyle,
+              ...(tipoCalendario === "montagens" ? estilos.tabAtivaStyle : {}),
+            }}
+          >
+            Montagens
+          </button>
         </div>
 
         <div style={estilos.mesAtualStyle}>{formatarMesAno(mesAtual)}</div>
 
         <div style={estilos.filtrosWrapStyle}>
-          <input value={pesquisa} onChange={(e) => setPesquisa(e.target.value)} placeholder="Pesquisar obra, cliente ou VAL" style={estilos.inputFiltroStyle} />
-          <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as (typeof ESTADOS_DISPONIVEIS)[number])} style={estilos.selectFiltroStyle}>
-            {ESTADOS_DISPONIVEIS.map((estado) => <option key={estado} value={estado} style={{ color: "black" }}>{estado}</option>)}
+          <input
+            value={pesquisa}
+            onChange={(e) => setPesquisa(e.target.value)}
+            placeholder="Pesquisar obra, cliente ou VAL"
+            style={estilos.inputFiltroStyle}
+          />
+          <select
+            value={filtroEstado}
+            onChange={(e) =>
+              setFiltroEstado(
+                e.target.value as (typeof ESTADOS_DISPONIVEIS)[number],
+              )
+            }
+            style={estilos.selectFiltroStyle}
+          >
+            {ESTADOS_DISPONIVEIS.map((estado) => (
+              <option key={estado} value={estado} style={{ color: "black" }}>
+                {estado}
+              </option>
+            ))}
           </select>
-          <select value={filtroArquivo} onChange={(e) => setFiltroArquivo(e.target.value as FiltroArquivo)} style={estilos.selectFiltroStyle}>
-            <option value="ativas" style={{ color: "black" }}>Ativas</option>
-            <option value="arquivadas" style={{ color: "black" }}>Arquivadas</option>
-            <option value="todas" style={{ color: "black" }}>Todas</option>
+          <select
+            value={filtroArquivo}
+            onChange={(e) => setFiltroArquivo(e.target.value as FiltroArquivo)}
+            style={estilos.selectFiltroStyle}
+          >
+            <option value="ativas" style={{ color: "black" }}>
+              Ativas
+            </option>
+            <option value="arquivadas" style={{ color: "black" }}>
+              Arquivadas
+            </option>
+            <option value="todas" style={{ color: "black" }}>
+              Todas
+            </option>
           </select>
-          <button type="button" onClick={limparFiltros} style={estilos.botaoLimparStyle}>Limpar filtros</button>
+          <button
+            type="button"
+            onClick={limparFiltros}
+            style={estilos.botaoLimparStyle}
+          >
+            Limpar filtros
+          </button>
         </div>
 
         <div style={estilos.cardStyle}>
           <h2 style={{ marginTop: 0 }}>Meta de Faturação</h2>
           <div style={estilos.metaEditorWrapStyle}>
             <div style={estilos.metaEditorCampoStyle}>
-              <label style={estilos.labelStyle}>Meta mensal desejada</label>
-              <input value={metaMensalEdit} onChange={(e) => setMetaMensalEdit(e.target.value)} placeholder="Ex: 120000" style={estilos.inputFiltroStyle} />
+              <label style={estilos.labelStyle}>Meta anual global</label>
+              <input
+                value={metaMensalEdit}
+                onChange={(e) => setMetaMensalEdit(e.target.value)}
+                placeholder="Ex: 1440000"
+                style={estilos.inputFiltroStyle}
+              />
             </div>
             <div style={estilos.metaInfoCardStyle}>
-              <div style={estilos.metaInfoTituloStyle}>Meta anual automática</div>
-              <div style={estilos.metaInfoValorStyle}>{((Number(metaMensalEdit.replace(",", ".")) || 0) * 12).toFixed(2)} €</div>
+              <div style={estilos.metaInfoTituloStyle}>Equivalente mensal</div>
+              <div style={estilos.metaInfoValorStyle}>
+                {formatarMoeda(
+                  (Number(metaMensalEdit.replace(",", ".")) || 0) / 12,
+                )}
+              </div>
             </div>
-            <button type="button" onClick={guardarMetaMensal} style={estilos.botaoPrincipalStyle} disabled={aGuardarMeta}>{aGuardarMeta ? "A guardar..." : "Guardar Meta"}</button>
+            <button
+              type="button"
+              onClick={guardarMetaMensal}
+              style={estilos.botaoPrincipalStyle}
+              disabled={aGuardarMeta}
+            >
+              {aGuardarMeta ? "A guardar..." : "Guardar Meta Global"}
+            </button>
           </div>
-          <div style={estilos.metaAjudaStyle}>A montagem/entrega manda. O sistema calcula acabamentos para trás e depois encaixa a produção antes, enchendo cada dia até 100% da meta diária antes de passar para o dia seguinte.</div>
+          <div style={estilos.metaAjudaStyle}>
+            Esta meta é guardada uma vez por ano e é usada em todos os meses. A
+            produção automática começa sempre no dia de hoje ou depois, nunca em
+            dias passados.
+          </div>
         </div>
 
         {mensagem && <div style={estilos.mensagemStyle}>{mensagem}</div>}
 
         {aCarregar ? (
-          <div style={estilos.cardStyle}><p style={{ opacity: 0.75 }}>A carregar calendário...</p></div>
+          <div style={estilos.cardStyle}>
+            <p style={{ opacity: 0.75 }}>A carregar calendário...</p>
+          </div>
         ) : (
           <>
             <div style={estilos.resumoGridStyle}>
-              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.objetivoMensal.toFixed(2)} €</div><div>Meta mensal</div></div>
-              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.objetivoDiario.toFixed(2)} €</div><div>Objetivo diário produção</div></div>
-              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.totalAtivos}</div><div>Obras ativas</div></div>
-              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.totalArquivados}</div><div>Obras arquivadas</div></div>
-              <div style={estilos.resumoCardStyle}><div style={estilos.resumoNumeroStyle}>{resumo.diasUteisAno}</div><div>Dias úteis reais do ano</div></div>
+              <div style={estilos.resumoCardStyle}>
+                <div style={estilos.resumoNumeroStyle}>
+                  {formatarMoeda(resumo.objetivoAnual)}
+                </div>
+                <div>Meta anual global</div>
+              </div>
+              <div style={estilos.resumoCardStyle}>
+                <div style={estilos.resumoNumeroStyle}>
+                  {formatarMoeda(resumo.objetivoDiario)}
+                </div>
+                <div>Objetivo diário produção</div>
+              </div>
+              <div style={estilos.resumoCardStyle}>
+                <div style={estilos.resumoNumeroStyle}>
+                  {formatarMoeda(valorOcupadoMes)}
+                </div>
+                <div>Valor ocupado no mês</div>
+              </div>
+              <div style={estilos.resumoCardStyle}>
+                <div style={estilos.resumoNumeroStyle}>
+                  {percentagemMesOcupado.toFixed(1)}%
+                </div>
+                <div>Do objetivo mensal</div>
+              </div>
+              <div style={estilos.resumoCardStyle}>
+                <div style={estilos.resumoNumeroStyle}>
+                  {resumo.totalAtivos}
+                </div>
+                <div>Obras ativas</div>
+              </div>
             </div>
 
             {alertas.length > 0 && (
@@ -1406,122 +1921,576 @@ export default function AdminCalendarioPage() {
                 <h2 style={{ marginTop: 0 }}>Alertas dos próximos 10 dias</h2>
                 <div style={estilos.alertasGridStyle}>
                   {alertas.slice(0, 8).map((alerta) => (
-                    <div key={alerta.id} style={{ ...estilos.alertaCardStyle, ...obterEstiloAlerta(alerta.nivel) }}>
-                      <div style={estilos.alertaTituloStyle}>{alerta.titulo}</div>
+                    <div
+                      key={alerta.id}
+                      style={{
+                        ...estilos.alertaCardStyle,
+                        ...obterEstiloAlerta(alerta.nivel),
+                      }}
+                    >
+                      <div style={estilos.alertaTituloStyle}>
+                        {alerta.titulo}
+                      </div>
                       <div style={estilos.alertaTextoStyle}>{alerta.texto}</div>
-                      <div style={estilos.alertaDataStyle}>{formatarData(alerta.data)} · {alerta.diasAte === 0 ? "hoje" : `em ${alerta.diasAte} dias`}</div>
+                      <div style={estilos.alertaDataStyle}>
+                        {formatarData(alerta.data)} ·{" "}
+                        {alerta.diasAte === 0
+                          ? "hoje"
+                          : `em ${alerta.diasAte} dias`}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div style={estilos.cardStyle}>
-              <div style={estilos.tituloComAcoesStyle}>
-                <div>
-                  <h2 style={{ marginTop: 0, marginBottom: 6 }}>Obras e datas manuais</h2>
-                  <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>Edita produção, acabamentos e montagem em qualquer separador.</p>
+            {(tipoCalendario === "acabamentos" ||
+              tipoCalendario === "montagens") && (
+              <div style={estilos.cardStyle}>
+                <div style={estilos.tituloComAcoesStyle}>
+                  <div>
+                    <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
+                      {tipoCalendario === "acabamentos"
+                        ? "Linha temporal de acabamentos"
+                        : "Linha temporal de montagens"}
+                    </h2>
+                    <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
+                      Os cartões começam minimizados. Abre apenas a obra que
+                      queres editar.
+                    </p>
+                  </div>
+                  <div style={estilos.acoesInlineStyle}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const todosAbertos: Record<string, boolean> = {};
+                        planeamentosVisiveis.forEach((item) => {
+                          todosAbertos[item.processo.id] = true;
+                        });
+                        setCartoesAbertos(todosAbertos);
+                      }}
+                      style={estilos.botaoSecundarioStyle}
+                    >
+                      Abrir todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCartoesAbertos({})}
+                      style={estilos.botaoSecundarioStyle}
+                    >
+                      Minimizar todos
+                    </button>
+                  </div>
                 </div>
-                <div style={estilos.acoesInlineStyle}>
-                  <button type="button" onClick={() => {
-                    const todos: Record<string, boolean> = {};
-                    planeamentosVisiveis.forEach((item) => { todos[item.processo.id] = true; });
-                    setCartoesAbertos(todos);
-                  }} style={estilos.botaoSecundarioStyle}>Abrir todos</button>
-                  <button type="button" onClick={() => setCartoesAbertos({})} style={estilos.botaoSecundarioStyle}>Minimizar todos</button>
-                </div>
-              </div>
 
-              <div style={estilos.timelineGridStyle}>
-                {planeamentosVisiveis.length === 0 ? <div style={estilos.semItensStyle}>Sem obras nesta vista.</div> : planeamentosVisiveis.map((item) => {
-                  const estaAberto = cartoesAbertos[item.processo.id] === true;
-                  const estaArquivado = item.processo.calendario_arquivado === true;
-
-                  return (
-                    <div key={item.processo.id} style={{ ...estilos.timelineCardStyle, opacity: estaArquivado ? 0.65 : 1 }}>
-                      <div style={estilos.cabecalhoCartaoStyle}>
-                        <button type="button" onClick={() => alternarCartao(item.processo.id)} style={estilos.botaoHeaderCartaoStyle}>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={estilos.timelineTituloStyle}>{estaAberto ? "▾" : "▸"} {item.processo.codigo_val || "Sem VAL"} · {item.processo.nome_obra || "Sem nome"}</div>
-                            <div style={estilos.subtextoStyle}>Cliente: {item.processo.nome_cliente || "—"}</div>
-                          </div>
-                        </button>
-                        <div style={estilos.badgesWrapStyle}>
-                          {item.temDatasManuais && <div style={estilos.manualBadgeStyle}>Datas manuais</div>}
-                          {estaArquivado && <div style={estilos.arquivadoBadgeStyle}>Arquivada</div>}
-                          <div style={estilos.timelineBadgeStyle}>Entrega: {formatarData(item.dataEntregaCalculada)}</div>
-                        </div>
-                      </div>
-
-                      <div style={estilos.timelineDatasStyle}>
-                        <span>Prod.: {formatarData(item.inicioProducao)} → {formatarData(item.fimProducao)}</span>
-                        <span>Acab.: {formatarData(item.inicioAcabamento)} → {formatarData(item.fimAcabamento)}</span>
-                        <span>Mont.: {formatarData(item.inicioMontagem)} → {formatarData(item.fimMontagem)}</span>
-                        <span>Valor: {obterValorFinanceiroProcesso(item.processo).toFixed(2)} €</span>
-                      </div>
-
-                      <div style={estilos.acoesInlineStyle}>
-                        <button type="button" onClick={() => alternarCartao(item.processo.id)} style={estilos.botaoSecundarioStyle}>{estaAberto ? "Minimizar" : "Abrir detalhes"}</button>
-                        <button type="button" onClick={() => arquivarOuRestaurarProcesso(item.processo, !estaArquivado)} disabled={processoAArquivar === item.processo.id} style={estaArquivado ? estilos.botaoPrincipalStyle : estilos.botaoRemoverStyle}>{processoAArquivar === item.processo.id ? "A guardar..." : estaArquivado ? "Restaurar obra" : "Arquivar obra"}</button>
-                      </div>
-
-                      {estaAberto && (
-                        <div style={estilos.gestaoGridStyle}>
-                          <div style={estilos.editarAcabamentoBoxStyle}>
-                            <strong>Datas manuais do calendário</strong>
-                            <div style={estilos.formGridStyle}>
-                              <label style={estilos.smallLabelStyle}>Início produção</label>
-                              <input type="date" value={datasManuaisEdit[item.processo.id]?.data_inicio_producao_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_inicio_producao_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
-                              <label style={estilos.smallLabelStyle}>Fim produção</label>
-                              <input type="date" value={datasManuaisEdit[item.processo.id]?.data_fim_producao_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_fim_producao_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
-                              <label style={estilos.smallLabelStyle}>Início acabamentos</label>
-                              <input type="date" value={datasManuaisEdit[item.processo.id]?.data_inicio_acabamento_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_inicio_acabamento_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
-                              <label style={estilos.smallLabelStyle}>Fim acabamentos</label>
-                              <input type="date" value={datasManuaisEdit[item.processo.id]?.data_fim_acabamento_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_fim_acabamento_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
-                              <label style={estilos.smallLabelStyle}>Início montagem</label>
-                              <input type="date" value={datasManuaisEdit[item.processo.id]?.data_inicio_montagem_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_inicio_montagem_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
-                              <label style={estilos.smallLabelStyle}>Fim montagem</label>
-                              <input type="date" value={datasManuaisEdit[item.processo.id]?.data_fim_montagem_manual || ""} onChange={(e) => setDatasManuaisEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], data_fim_montagem_manual: e.target.value } }))} style={estilos.inputFiltroStyle} />
-                            </div>
-                            <div style={estilos.acoesInlineStyle}>
-                              <button type="button" onClick={() => guardarDatasManuais(item.processo)} disabled={processoAGuardarDatas === item.processo.id} style={estilos.botaoPrincipalStyle}>{processoAGuardarDatas === item.processo.id ? "A guardar..." : "Guardar datas"}</button>
-                              <button type="button" onClick={() => limparDatasManuais(item.processo)} disabled={processoAGuardarDatas === item.processo.id} style={estilos.botaoRemoverStyle}>Limpar datas</button>
-                            </div>
-                          </div>
-
-                          <div style={estilos.editarAcabamentoBoxStyle}>
-                            <strong>Ajustar dias de acabamento</strong>
-                            <div style={estilos.editarAcabamentoGridStyle}>
-                              <input value={diasAcabamentoEdit[item.processo.id] || ""} onChange={(e) => setDiasAcabamentoEdit((prev) => ({ ...prev, [item.processo.id]: e.target.value }))} type="number" min="0" step="1" placeholder="Ex: 7" style={estilos.inputFiltroStyle} />
-                              <button type="button" onClick={() => guardarDiasAcabamento(item.processo)} disabled={processoAGuardarAcabamento === item.processo.id} style={estilos.botaoPrincipalStyle}>{processoAGuardarAcabamento === item.processo.id ? "A guardar..." : "Guardar"}</button>
-                            </div>
-                            <div style={estilos.metaAjudaStyle}>Com fim de acabamento ou montagem, o início é calculado para trás.</div>
-                          </div>
-
-                          <div style={estilos.editarAcabamentoBoxStyle}>
-                            <strong>Responsáveis e emails</strong>
-                            <div style={estilos.formGridStyle}>
-                              <input value={contactosEdit[item.processo.id]?.responsavel_obra_nome || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_obra_nome: e.target.value } }))} placeholder="Nome responsável obra" style={estilos.inputFiltroStyle} />
-                              <input value={contactosEdit[item.processo.id]?.responsavel_obra_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_obra_email: e.target.value } }))} placeholder="Email responsável obra" style={estilos.inputFiltroStyle} />
-                              <input value={contactosEdit[item.processo.id]?.responsavel_acabamentos_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_acabamentos_email: e.target.value } }))} placeholder="Email acabamentos" style={estilos.inputFiltroStyle} />
-                              <input value={contactosEdit[item.processo.id]?.responsavel_montagem_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], responsavel_montagem_email: e.target.value } }))} placeholder="Email montagem" style={estilos.inputFiltroStyle} />
-                              <input value={contactosEdit[item.processo.id]?.admin_alerta_email || ""} onChange={(e) => setContactosEdit((prev) => ({ ...prev, [item.processo.id]: { ...prev[item.processo.id], admin_alerta_email: e.target.value } }))} placeholder="Email admin em cópia" style={estilos.inputFiltroStyle} />
-                            </div>
-                            <div style={estilos.acoesInlineStyle}>
-                              <button type="button" onClick={() => guardarContactos(item.processo)} disabled={processoAGuardarContactos === item.processo.id} style={estilos.botaoPrincipalStyle}>{processoAGuardarContactos === item.processo.id ? "A guardar..." : "Guardar emails"}</button>
-                              <button type="button" onClick={() => enviarAlertasEmail(item.processo)} disabled={processoAEnviarEmail === item.processo.id} style={estilos.botaoSecundarioStyle}>{processoAEnviarEmail === item.processo.id ? "A enviar..." : "Enviar alerta"}</button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                <div style={estilos.timelineGridStyle}>
+                  {planeamentosVisiveis.length === 0 ? (
+                    <div style={estilos.semItensStyle}>
+                      Sem obras nesta vista.
                     </div>
-                  );
-                })}
+                  ) : (
+                    planeamentosVisiveis.map((item) => {
+                      const estaAberto =
+                        cartoesAbertos[item.processo.id] === true;
+                      const estaArquivado =
+                        item.processo.calendario_arquivado === true;
+                      return (
+                        <div
+                          key={item.processo.id}
+                          style={{
+                            ...estilos.timelineCardStyle,
+                            opacity: estaArquivado ? 0.65 : 1,
+                          }}
+                        >
+                          <div style={estilos.cabecalhoCartaoStyle}>
+                            <button
+                              type="button"
+                              onClick={() => alternarCartao(item.processo.id)}
+                              style={estilos.botaoHeaderCartaoStyle}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <div style={estilos.timelineTituloStyle}>
+                                  {estaAberto ? "▾" : "▸"}{" "}
+                                  {item.processo.codigo_val || "Sem VAL"} ·{" "}
+                                  {item.processo.nome_obra || "Sem nome"}
+                                </div>
+                                <div style={estilos.subtextoStyle}>
+                                  Cliente: {item.processo.nome_cliente || "—"}
+                                </div>
+                              </div>
+                            </button>
+                            <div style={estilos.badgesWrapStyle}>
+                              {item.temDatasManuais && (
+                                <div style={estilos.manualBadgeStyle}>
+                                  Datas manuais
+                                </div>
+                              )}
+                              {estaArquivado && (
+                                <div style={estilos.arquivadoBadgeStyle}>
+                                  Arquivada
+                                </div>
+                              )}
+                              <div style={estilos.timelineBadgeStyle}>
+                                {tipoCalendario === "acabamentos"
+                                  ? `${item.datasAcabamento.length} dias acab.`
+                                  : `${item.datasMontagem.length} dias montagem`}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={estilos.timelineDatasStyle}>
+                            <span>
+                              Prod.: {formatarData(item.inicioProducao)} →{" "}
+                              {formatarData(item.fimProducao)}
+                            </span>
+                            <span>
+                              Acab.: {formatarData(item.inicioAcabamento)} →{" "}
+                              {formatarData(item.fimAcabamento)}
+                            </span>
+                            <span>
+                              Mont.: {formatarData(item.inicioMontagem)} →{" "}
+                              {formatarData(item.fimMontagem)}
+                            </span>
+                            <span>
+                              Entrega: {formatarData(item.dataEntregaCalculada)}
+                            </span>
+                          </div>
+                          <div style={estilos.timelineBarraWrapStyle}>
+                            <div
+                              style={{
+                                ...estilos.timelineBarraStyle,
+                                background:
+                                  tipoCalendario === "montagens"
+                                    ? "linear-gradient(90deg, rgba(156,39,176,0.35), rgba(186,104,200,0.95))"
+                                    : "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(66,133,244,0.95))",
+                              }}
+                            />
+                          </div>
+                          <div style={estilos.acoesInlineStyle}>
+                            <button
+                              type="button"
+                              onClick={() => alternarCartao(item.processo.id)}
+                              style={estilos.botaoSecundarioStyle}
+                            >
+                              {estaAberto ? "Minimizar" : "Abrir detalhes"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                arquivarOuRestaurarProcesso(
+                                  item.processo,
+                                  !estaArquivado,
+                                )
+                              }
+                              disabled={processoAArquivar === item.processo.id}
+                              style={
+                                estaArquivado
+                                  ? estilos.botaoPrincipalStyle
+                                  : estilos.botaoRemoverStyle
+                              }
+                            >
+                              {processoAArquivar === item.processo.id
+                                ? "A guardar..."
+                                : estaArquivado
+                                  ? "Restaurar obra"
+                                  : "Arquivar obra"}
+                            </button>
+                          </div>
+
+                          {estaAberto && (
+                            <div style={estilos.gestaoGridStyle}>
+                              <div style={estilos.editarAcabamentoBoxStyle}>
+                                <strong>Responsáveis e emails</strong>
+                                <div style={estilos.formGridStyle}>
+                                  <input
+                                    value={
+                                      contactosEdit[item.processo.id]
+                                        ?.responsavel_obra_nome || ""
+                                    }
+                                    onChange={(e) =>
+                                      setContactosEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          responsavel_obra_nome: e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Nome responsável obra"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <input
+                                    value={
+                                      contactosEdit[item.processo.id]
+                                        ?.responsavel_obra_email || ""
+                                    }
+                                    onChange={(e) =>
+                                      setContactosEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          responsavel_obra_email:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Email responsável obra"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <input
+                                    value={
+                                      contactosEdit[item.processo.id]
+                                        ?.responsavel_acabamentos_nome || ""
+                                    }
+                                    onChange={(e) =>
+                                      setContactosEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          responsavel_acabamentos_nome:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Nome responsável acabamentos"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <input
+                                    value={
+                                      contactosEdit[item.processo.id]
+                                        ?.responsavel_acabamentos_email || ""
+                                    }
+                                    onChange={(e) =>
+                                      setContactosEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          responsavel_acabamentos_email:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Email responsável acabamentos"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <input
+                                    value={
+                                      contactosEdit[item.processo.id]
+                                        ?.responsavel_montagem_nome || ""
+                                    }
+                                    onChange={(e) =>
+                                      setContactosEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          responsavel_montagem_nome:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Nome responsável montagem"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <input
+                                    value={
+                                      contactosEdit[item.processo.id]
+                                        ?.responsavel_montagem_email || ""
+                                    }
+                                    onChange={(e) =>
+                                      setContactosEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          responsavel_montagem_email:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Email responsável montagem"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <input
+                                    value={
+                                      contactosEdit[item.processo.id]
+                                        ?.admin_alerta_email || ""
+                                    }
+                                    onChange={(e) =>
+                                      setContactosEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          admin_alerta_email: e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="Email admin em cópia"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                </div>
+                                <div style={estilos.acoesInlineStyle}>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      guardarContactos(item.processo)
+                                    }
+                                    disabled={
+                                      processoAGuardarContactos ===
+                                      item.processo.id
+                                    }
+                                    style={estilos.botaoPrincipalStyle}
+                                  >
+                                    {processoAGuardarContactos ===
+                                    item.processo.id
+                                      ? "A guardar..."
+                                      : "Guardar emails"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      enviarAlertasEmail(item.processo)
+                                    }
+                                    disabled={
+                                      processoAEnviarEmail === item.processo.id
+                                    }
+                                    style={estilos.botaoSecundarioStyle}
+                                  >
+                                    {processoAEnviarEmail === item.processo.id
+                                      ? "A enviar..."
+                                      : "Enviar alerta"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div style={estilos.editarAcabamentoBoxStyle}>
+                                <strong>Datas manuais do calendário</strong>
+                                <div style={estilos.formGridStyle}>
+                                  <label style={estilos.smallLabelStyle}>
+                                    Início produção
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={
+                                      datasManuaisEdit[item.processo.id]
+                                        ?.data_inicio_producao_manual || ""
+                                    }
+                                    onChange={(e) =>
+                                      setDatasManuaisEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          data_inicio_producao_manual:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <label style={estilos.smallLabelStyle}>
+                                    Fim produção
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={
+                                      datasManuaisEdit[item.processo.id]
+                                        ?.data_fim_producao_manual || ""
+                                    }
+                                    onChange={(e) =>
+                                      setDatasManuaisEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          data_fim_producao_manual:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <label style={estilos.smallLabelStyle}>
+                                    Início acabamentos
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={
+                                      datasManuaisEdit[item.processo.id]
+                                        ?.data_inicio_acabamento_manual || ""
+                                    }
+                                    onChange={(e) =>
+                                      setDatasManuaisEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          data_inicio_acabamento_manual:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <label style={estilos.smallLabelStyle}>
+                                    Fim acabamentos
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={
+                                      datasManuaisEdit[item.processo.id]
+                                        ?.data_fim_acabamento_manual || ""
+                                    }
+                                    onChange={(e) =>
+                                      setDatasManuaisEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          data_fim_acabamento_manual:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <label style={estilos.smallLabelStyle}>
+                                    Início montagem
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={
+                                      datasManuaisEdit[item.processo.id]
+                                        ?.data_inicio_montagem_manual || ""
+                                    }
+                                    onChange={(e) =>
+                                      setDatasManuaisEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          data_inicio_montagem_manual:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <label style={estilos.smallLabelStyle}>
+                                    Fim montagem
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={
+                                      datasManuaisEdit[item.processo.id]
+                                        ?.data_fim_montagem_manual || ""
+                                    }
+                                    onChange={(e) =>
+                                      setDatasManuaisEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: {
+                                          ...prev[item.processo.id],
+                                          data_fim_montagem_manual:
+                                            e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                </div>
+                                <div style={estilos.acoesInlineStyle}>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      guardarDatasManuais(item.processo)
+                                    }
+                                    disabled={
+                                      processoAGuardarDatas === item.processo.id
+                                    }
+                                    style={estilos.botaoPrincipalStyle}
+                                  >
+                                    {processoAGuardarDatas === item.processo.id
+                                      ? "A guardar..."
+                                      : "Guardar datas"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      limparDatasManuais(item.processo)
+                                    }
+                                    disabled={
+                                      processoAGuardarDatas === item.processo.id
+                                    }
+                                    style={estilos.botaoRemoverStyle}
+                                  >
+                                    Limpar datas
+                                  </button>
+                                </div>
+                                <div style={estilos.metaAjudaStyle}>
+                                  Se colocares só fim de acabamento e dias de
+                                  acabamento, o início é calculado para trás. Se
+                                  colocares montagem e dias de acabamento, os
+                                  acabamentos ficam antes da montagem. A
+                                  produção não muda.
+                                </div>
+                              </div>
+
+                              <div style={estilos.editarAcabamentoBoxStyle}>
+                                <strong>Ajustar dias de acabamento</strong>
+                                <div style={estilos.editarAcabamentoGridStyle}>
+                                  <input
+                                    value={
+                                      diasAcabamentoEdit[item.processo.id] || ""
+                                    }
+                                    onChange={(e) =>
+                                      setDiasAcabamentoEdit((prev) => ({
+                                        ...prev,
+                                        [item.processo.id]: e.target.value,
+                                      }))
+                                    }
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    placeholder="Ex: 7"
+                                    style={estilos.inputFiltroStyle}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      guardarDiasAcabamento(item.processo)
+                                    }
+                                    disabled={
+                                      processoAGuardarAcabamento ===
+                                      item.processo.id
+                                    }
+                                    style={estilos.botaoPrincipalStyle}
+                                  >
+                                    {processoAGuardarAcabamento ===
+                                    item.processo.id
+                                      ? "A guardar..."
+                                      : "Guardar"}
+                                  </button>
+                                </div>
+                                <div style={estilos.metaAjudaStyle}>
+                                  Se já existir fim de acabamento ou montagem,
+                                  os dias são ajustados para trás sem mexer na
+                                  produção.
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={estilos.calendarCardStyle}>
-              <div style={estilos.diasSemanaHeaderStyle}>{nomesDias.map((dia, index) => <div key={`${dia}-${index}`} style={estilos.diaSemanaHeaderItemStyle}>{dia}</div>)}</div>
+              <div style={estilos.diasSemanaHeaderStyle}>
+                {nomesDias.map((dia, index) => (
+                  <div
+                    key={`${dia}-${index}`}
+                    style={estilos.diaSemanaHeaderItemStyle}
+                  >
+                    {dia}
+                  </div>
+                ))}
+              </div>
+
               <div style={estilos.grelhaMesStyle}>
                 {diasDoMes.map((dia) => {
                   const processosDoDia = obterProcessosDoDia(dia.data);
@@ -1529,38 +2498,155 @@ export default function AdminCalendarioPage() {
                   const desbloqueadoFimSemana = eDesbloqueioFimSemana(bloqueio);
                   const hoje = formatarDataISO(new Date()) === dia.chave;
                   const valorDia = obterValorPrevistoDoDia(dia.data);
-                  const diasFinanceirosDia = obterDiasFinanceirosDoDia(dia.data);
-                  const estiloFinanceiro = obterEstiloFinanceiroDia(valorDia);
-                  const limiteEventos = tipoCalendario === "producao" ? (eDesktop ? 3 : 2) : 2;
+                  const diasFinanceirosDia = obterDiasFinanceirosDoDia(
+                    dia.data,
+                  );
+                  const estiloFinanceiro = obterEstiloFinanceiroDia(
+                    valorDia,
+                    resumo.objetivoDiario,
+                  );
+                  const limiteEventos =
+                    tipoCalendario === "producao" ? (eDesktop ? 3 : 2) : 1;
                   const fimSemana = eFimDeSemana(dia.data);
-                  const bloqueadoVisual = eBloqueioManual(dia.data) || (fimSemana && !desbloqueadoFimSemana);
+                  const bloqueadoVisual =
+                    eBloqueioManual(dia.data) ||
+                    (fimSemana && !desbloqueadoFimSemana);
 
                   return (
-                    <button key={dia.chave} type="button" onClick={() => abrirModalBloqueio(dia.data)} style={{ ...estilos.diaMesCardStyle, opacity: dia.pertenceAoMesAtual ? 1 : 0.42, border: hoje ? "1px solid rgba(66,133,244,0.95)" : "1px solid rgba(255,255,255,0.06)", background: bloqueadoVisual ? "rgba(160,82,45,0.13)" : fimSemana && desbloqueadoFimSemana ? "rgba(52,168,83,0.08)" : "rgba(255,255,255,0.01)", boxShadow: hoje ? "inset 0 0 0 1px rgba(66,133,244,0.4)" : "none" }}>
+                    <button
+                      key={dia.chave}
+                      type="button"
+                      onClick={() => abrirModalBloqueio(dia.data)}
+                      style={{
+                        ...estilos.diaMesCardStyle,
+                        opacity: dia.pertenceAoMesAtual ? 1 : 0.42,
+                        border: hoje
+                          ? "1px solid rgba(66,133,244,0.95)"
+                          : "1px solid rgba(255,255,255,0.06)",
+                        background: bloqueadoVisual
+                          ? "rgba(160,82,45,0.13)"
+                          : fimSemana && desbloqueadoFimSemana
+                            ? "rgba(52,168,83,0.08)"
+                            : "rgba(255,255,255,0.01)",
+                        boxShadow: hoje
+                          ? "inset 0 0 0 1px rgba(66,133,244,0.4)"
+                          : "none",
+                      }}
+                    >
                       <div style={estilos.topoDiaStyle}>
-                        <div style={{ ...estilos.numeroDiaStyle, background: hoje ? "rgba(66,133,244,0.95)" : "transparent", color: hoje ? "white" : "inherit" }}>{dia.dia}</div>
-                        <div style={{ ...estilos.financeBadgeStyle, background: estiloFinanceiro.fundo, border: `1px solid ${estiloFinanceiro.borda}`, color: estiloFinanceiro.texto }}>{tipoCalendario === "producao" ? `${valorDia.toFixed(0)} €` : tipoCalendario === "acabamentos" ? `${processosDoDia.length} acab.` : `${processosDoDia.length} mont.`}</div>
+                        <div
+                          style={{
+                            ...estilos.numeroDiaStyle,
+                            background: hoje
+                              ? "rgba(66,133,244,0.95)"
+                              : "transparent",
+                            color: hoje ? "white" : "inherit",
+                          }}
+                        >
+                          {dia.dia}
+                        </div>
+                        <div
+                          style={{
+                            ...estilos.financeBadgeStyle,
+                            background: estiloFinanceiro.fundo,
+                            border: `1px solid ${estiloFinanceiro.borda}`,
+                            color: estiloFinanceiro.texto,
+                          }}
+                        >
+                          {tipoCalendario === "producao"
+                            ? `${valorDia.toFixed(0)} €`
+                            : tipoCalendario === "acabamentos"
+                              ? `${processosDoDia.length} acab.`
+                              : `${processosDoDia.length} mont.`}
+                        </div>
                       </div>
 
                       <div style={estilos.eventosDiaStyle}>
-                        {bloqueadoVisual && <div style={{ ...estilos.eventoStyle, background: "rgba(160,82,45,0.90)", border: "1px solid rgba(160,82,45,1)" }}>{fimSemana && !eBloqueioManual(dia.data) ? "Fim semana" : "Bloqueado"}</div>}
-                        {fimSemana && desbloqueadoFimSemana && <div style={{ ...estilos.eventoStyle, background: "rgba(52,168,83,0.70)", border: "1px solid rgba(52,168,83,1)" }}>Desbloqueado</div>}
-                        {processosDoDia.length === 0 && !bloqueadoVisual && !desbloqueadoFimSemana ? <div style={estilos.diaVazioStyle}>—</div> : processosDoDia.slice(0, limiteEventos).map((processo) => {
-                          const planeamento = obterPlaneamentoProcesso(processo.id);
-                          const cores = obterCoresEvento();
-                          const valorProcessoDia = obterValorProducaoDoProcessoNoDia(processo.id, dia.data);
-                          return (
-                            <div key={`${dia.chave}-${processo.id}`} title={`${processo.codigo_val || "Sem VAL"} | ${processo.nome_obra || "Obra"} | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`} style={{ ...estilos.eventoStyle, background: cores.fundo, border: `1px solid ${cores.borda}` }}>
-                              {planeamento?.temDatasManuais ? "✎ " : ""}{processo.calendario_arquivado ? "🗄 " : ""}{processo.codigo_val || "Sem VAL"} · {processo.nome_obra || processo.nome_cliente || "Sem nome"}
-                            </div>
-                          );
-                        })}
-                        {processosDoDia.length > limiteEventos && <div style={estilos.maisEventosStyle}>+{processosDoDia.length - limiteEventos} mais</div>}
+                        {bloqueadoVisual && (
+                          <div
+                            style={{
+                              ...estilos.eventoStyle,
+                              background: "rgba(160,82,45,0.90)",
+                              border: "1px solid rgba(160,82,45,1)",
+                            }}
+                          >
+                            {fimSemana && !eBloqueioManual(dia.data)
+                              ? "Fim semana"
+                              : "Bloqueado"}
+                          </div>
+                        )}
+                        {fimSemana && desbloqueadoFimSemana && (
+                          <div
+                            style={{
+                              ...estilos.eventoStyle,
+                              background: "rgba(52,168,83,0.70)",
+                              border: "1px solid rgba(52,168,83,1)",
+                            }}
+                          >
+                            Desbloqueado
+                          </div>
+                        )}
+                        {processosDoDia.length === 0 &&
+                        !bloqueadoVisual &&
+                        !desbloqueadoFimSemana ? (
+                          <div style={estilos.diaVazioStyle}>—</div>
+                        ) : (
+                          processosDoDia
+                            .slice(0, limiteEventos)
+                            .map((processo) => {
+                              const planeamento = obterPlaneamentoProcesso(
+                                processo.id,
+                              );
+                              const cores = obterCoresEstado(processo.estado);
+                              const valorProcessoDia =
+                                obterValorProducaoDoProcessoNoDia(
+                                  processo.id,
+                                  dia.data,
+                                );
+                              return (
+                                <div
+                                  key={`${dia.chave}-${processo.id}`}
+                                  title={`${processo.codigo_val || "Sem VAL"} | ${processo.nome_obra || "Obra"} | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`}
+                                  style={{
+                                    ...estilos.eventoStyle,
+                                    background: cores.fundo,
+                                    border: `1px solid ${cores.borda}`,
+                                  }}
+                                >
+                                  {planeamento?.temDatasManuais ? "✎ " : ""}
+                                  {processo.calendario_arquivado ? "🗄 " : ""}
+                                  {processo.codigo_val || "Sem VAL"} ·{" "}
+                                  {processo.nome_obra ||
+                                    processo.nome_cliente ||
+                                    "Sem nome"}
+                                </div>
+                              );
+                            })
+                        )}
+                        {processosDoDia.length > limiteEventos && (
+                          <div style={estilos.maisEventosStyle}>
+                            +{processosDoDia.length - limiteEventos} mais
+                          </div>
+                        )}
                       </div>
 
-                      <div style={{ ...estilos.rodapeFinanceiroDiaStyle, background: estiloFinanceiro.fundo, border: `1px solid ${estiloFinanceiro.borda}` }}>
-                        <div style={{ color: estiloFinanceiro.texto }}>{tipoCalendario === "producao" ? `${diasFinanceirosDia.toFixed(2)} dias` : `${processosDoDia.length} obras`}</div>
-                        <div style={{ opacity: 0.8 }}>{tipoCalendario === "producao" ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €` : "Ver detalhes"}</div>
+                      <div
+                        style={{
+                          ...estilos.rodapeFinanceiroDiaStyle,
+                          background: estiloFinanceiro.fundo,
+                          border: `1px solid ${estiloFinanceiro.borda}`,
+                        }}
+                      >
+                        <div style={{ color: estiloFinanceiro.texto }}>
+                          {tipoCalendario === "producao"
+                            ? `${diasFinanceirosDia.toFixed(2)} dias`
+                            : `${processosDoDia.length} obras`}
+                        </div>
+                        <div style={{ opacity: 0.8 }}>
+                          {tipoCalendario === "producao"
+                            ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €`
+                            : "Ver timeline"}
+                        </div>
                       </div>
                     </button>
                   );
@@ -1573,35 +2659,150 @@ export default function AdminCalendarioPage() {
         {diaSelecionado && (
           <div style={estilos.overlayStyle}>
             <div style={estilos.modalStyle}>
-              <h3 style={{ marginTop: 0, marginBottom: 10 }}>Dia {formatarData(formatarDataISO(diaSelecionado))}</h3>
+              <h3 style={{ marginTop: 0, marginBottom: "10px" }}>
+                Dia {formatarData(formatarDataISO(diaSelecionado))}
+              </h3>
               <div style={estilos.modalResumoGridStyle}>
-                <div style={estilos.modalResumoCardStyle}><div style={estilos.modalResumoTituloStyle}>Previsto produção</div><div style={estilos.modalResumoValorStyle}>{valorDiaSelecionado.toFixed(2)} €</div></div>
-                <div style={estilos.modalResumoCardStyle}><div style={estilos.modalResumoTituloStyle}>Dias cobertos</div><div style={estilos.modalResumoValorStyle}>{diasFinanceirosDiaSelecionado.toFixed(2)}</div></div>
-                <div style={estilos.modalResumoCardStyle}><div style={estilos.modalResumoTituloStyle}>Processos</div><div style={estilos.modalResumoValorStyle}>{processosDiaSelecionado.length}</div></div>
+                <div style={estilos.modalResumoCardStyle}>
+                  <div style={estilos.modalResumoTituloStyle}>
+                    Previsto produção
+                  </div>
+                  <div style={estilos.modalResumoValorStyle}>
+                    {formatarMoeda(valorDiaSelecionado)}
+                  </div>
+                </div>
+                <div style={estilos.modalResumoCardStyle}>
+                  <div style={estilos.modalResumoTituloStyle}>
+                    Dias cobertos
+                  </div>
+                  <div style={estilos.modalResumoValorStyle}>
+                    {diasFinanceirosDiaSelecionado.toFixed(2)}
+                  </div>
+                </div>
+                <div style={estilos.modalResumoCardStyle}>
+                  <div style={estilos.modalResumoTituloStyle}>Processos</div>
+                  <div style={estilos.modalResumoValorStyle}>
+                    {processosDiaSelecionado.length}
+                  </div>
+                </div>
               </div>
 
-              {bloqueioDiaSelecionado && !diaSelecionadoFimSemanaDesbloqueado && <div style={estilos.bloqueioInfoStyle}><strong>Bloqueio atual:</strong> {bloqueioDiaSelecionado.motivo || "Sem motivo"}</div>}
-              {diaSelecionadoFimSemanaDesbloqueado && <div style={estilos.desbloqueioInfoStyle}><strong>Fim de semana desbloqueado.</strong></div>}
+              <p style={{ opacity: 0.8, marginTop: "16px", lineHeight: 1.4 }}>
+                Sábados e domingos ficam bloqueados por defeito. Podes
+                desbloquear este dia se for necessário produzir.
+              </p>
+              {bloqueioDiaSelecionado &&
+                !diaSelecionadoFimSemanaDesbloqueado && (
+                  <div style={estilos.bloqueioInfoStyle}>
+                    <strong>Bloqueio atual:</strong>{" "}
+                    {bloqueioDiaSelecionado.motivo || "Sem motivo"}
+                  </div>
+                )}
+              {diaSelecionadoFimSemanaDesbloqueado && (
+                <div style={estilos.desbloqueioInfoStyle}>
+                  <strong>Fim de semana desbloqueado.</strong>
+                </div>
+              )}
 
               <label style={estilos.labelStyle}>Motivo do bloqueio</label>
-              <textarea value={motivoBloqueio} onChange={(e) => setMotivoBloqueio(e.target.value)} placeholder="Ex: Feriado, manutenção, equipa indisponível" style={estilos.textareaStyle} />
+              <textarea
+                value={motivoBloqueio}
+                onChange={(e) => setMotivoBloqueio(e.target.value)}
+                placeholder="Ex: Feriado, manutenção, equipa indisponível"
+                style={estilos.textareaStyle}
+              />
 
-              <div style={{ marginTop: 18 }}>
-                <h4 style={{ marginTop: 0, marginBottom: 10 }}>Processos deste dia · {tipoCalendario === "producao" ? "Produção" : tipoCalendario === "acabamentos" ? "Acabamentos" : "Montagens"}</h4>
-                {processosDiaSelecionado.length === 0 ? <div style={estilos.semItensStyle}>Sem processos neste dia.</div> : (
-                  <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ marginTop: "18px" }}>
+                <h4 style={{ marginTop: 0, marginBottom: "10px" }}>
+                  Processos deste dia ·{" "}
+                  {tipoCalendario === "producao"
+                    ? "Produção"
+                    : tipoCalendario === "acabamentos"
+                      ? "Acabamentos"
+                      : "Montagens"}
+                </h4>
+                {processosDiaSelecionado.length === 0 ? (
+                  <div style={estilos.semItensStyle}>
+                    Sem processos neste dia.
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gap: "10px" }}>
                     {processosDiaSelecionado.map((processo) => {
                       const planeamento = obterPlaneamentoProcesso(processo.id);
-                      const valorProcessoDia = obterValorProducaoDoProcessoNoDia(processo.id, diaSelecionado);
+                      const valorProcessoDia = diaSelecionado
+                        ? obterValorProducaoDoProcessoNoDia(
+                            processo.id,
+                            diaSelecionado,
+                          )
+                        : 0;
                       return (
-                        <div key={processo.id} style={estilos.processoDiaCardStyle}>
-                          <div style={{ fontWeight: "bold" }}>{processo.codigo_val || "Sem VAL"} · {processo.nome_obra || "Sem nome"}</div>
-                          <div style={estilos.subtextoStyle}>Cliente: {processo.nome_cliente || "—"}</div>
-                          {tipoCalendario === "producao" && <div style={estilos.subtextoStyle}>Valor reservado neste dia: {valorProcessoDia.toFixed(2)} €</div>}
-                          <div style={estilos.subtextoStyle}>Produção: {formatarData(planeamento?.inicioProducao)} até {formatarData(planeamento?.fimProducao)}</div>
-                          <div style={estilos.subtextoStyle}>Acabamentos: {formatarData(planeamento?.inicioAcabamento)} até {formatarData(planeamento?.fimAcabamento)}</div>
-                          <div style={estilos.subtextoStyle}>Montagem: {formatarData(planeamento?.inicioMontagem)} até {formatarData(planeamento?.fimMontagem)}</div>
-                          <div style={estilos.subtextoStyle}>Entrega calculada: {formatarData(planeamento?.dataEntregaCalculada)}</div>
+                        <div
+                          key={processo.id}
+                          style={estilos.processoDiaCardStyle}
+                        >
+                          <div style={{ fontWeight: "bold" }}>
+                            {processo.codigo_val || "Sem VAL"} ·{" "}
+                            {processo.nome_obra || "Sem nome"}
+                          </div>
+                          <div style={estilos.subtextoStyle}>
+                            Cliente: {processo.nome_cliente || "—"}
+                          </div>
+                          {tipoCalendario === "producao" && (
+                            <div style={estilos.subtextoStyle}>
+                              Valor reservado neste dia:{" "}
+                              {formatarMoeda(valorProcessoDia)}
+                            </div>
+                          )}
+                          <div style={estilos.subtextoStyle}>
+                            Responsável obra:{" "}
+                            {processo.responsavel_obra_nome || "—"} ·{" "}
+                            {processo.responsavel_obra_email || "sem email"}
+                          </div>
+                          <div style={estilos.subtextoStyle}>
+                            Acabamentos:{" "}
+                            {processo.responsavel_acabamentos_nome || "—"} ·{" "}
+                            {processo.responsavel_acabamentos_email ||
+                              "sem email"}
+                          </div>
+                          <div style={estilos.subtextoStyle}>
+                            Montagem:{" "}
+                            {processo.responsavel_montagem_nome || "—"} ·{" "}
+                            {processo.responsavel_montagem_email || "sem email"}
+                          </div>
+                          <div style={estilos.subtextoStyle}>
+                            Produção:{" "}
+                            {formatarData(planeamento?.inicioProducao || null)}{" "}
+                            até {formatarData(planeamento?.fimProducao || null)}
+                          </div>
+                          <div style={estilos.subtextoStyle}>
+                            Acabamentos:{" "}
+                            {formatarData(
+                              planeamento?.inicioAcabamento || null,
+                            )}{" "}
+                            até{" "}
+                            {formatarData(planeamento?.fimAcabamento || null)}
+                          </div>
+                          <div style={estilos.subtextoStyle}>
+                            Montagem:{" "}
+                            {formatarData(planeamento?.inicioMontagem || null)}{" "}
+                            até {formatarData(planeamento?.fimMontagem || null)}
+                          </div>
+                          <div style={estilos.subtextoStyle}>
+                            Entrega calculada:{" "}
+                            {formatarData(
+                              planeamento?.dataEntregaCalculada || null,
+                            )}
+                          </div>
+                          {planeamento?.temDatasManuais && (
+                            <div style={estilos.manualBadgeStyle}>
+                              Esta obra tem datas manuais
+                            </div>
+                          )}
+                          {processo.calendario_arquivado && (
+                            <div style={estilos.arquivadoBadgeStyle}>
+                              Obra arquivada
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1610,11 +2811,53 @@ export default function AdminCalendarioPage() {
               </div>
 
               <div style={estilos.modalAcoesStyle}>
-                <button type="button" onClick={fecharModalBloqueio} style={estilos.botaoSecundarioStyle}>Fechar</button>
-                {diaSelecionadoFimSemana && !diaSelecionadoFimSemanaDesbloqueado && <button type="button" onClick={desbloquearFimSemana} style={estilos.botaoPrincipalStyle} disabled={aGuardarBloqueio}>{aGuardarBloqueio ? "A desbloquear..." : "Desbloquear fim de semana"}</button>}
-                {diaSelecionadoFimSemana && diaSelecionadoFimSemanaDesbloqueado && <button type="button" onClick={voltarABloquearFimSemana} style={estilos.botaoRemoverStyle} disabled={aRemoverBloqueio}>{aRemoverBloqueio ? "A bloquear..." : "Voltar a bloquear"}</button>}
-                <button type="button" onClick={removerBloqueio} style={estilos.botaoRemoverStyle} disabled={aRemoverBloqueio}>{aRemoverBloqueio ? "A remover..." : "Remover Bloqueio"}</button>
-                <button type="button" onClick={guardarBloqueio} style={estilos.botaoPrincipalStyle} disabled={aGuardarBloqueio}>{aGuardarBloqueio ? "A guardar..." : "Guardar Bloqueio"}</button>
+                <button
+                  type="button"
+                  onClick={fecharModalBloqueio}
+                  style={estilos.botaoSecundarioStyle}
+                >
+                  Fechar
+                </button>
+                {diaSelecionadoFimSemana &&
+                  !diaSelecionadoFimSemanaDesbloqueado && (
+                    <button
+                      type="button"
+                      onClick={desbloquearFimSemana}
+                      style={estilos.botaoPrincipalStyle}
+                      disabled={aGuardarBloqueio}
+                    >
+                      {aGuardarBloqueio
+                        ? "A desbloquear..."
+                        : "Desbloquear fim de semana"}
+                    </button>
+                  )}
+                {diaSelecionadoFimSemana &&
+                  diaSelecionadoFimSemanaDesbloqueado && (
+                    <button
+                      type="button"
+                      onClick={voltarABloquearFimSemana}
+                      style={estilos.botaoRemoverStyle}
+                      disabled={aRemoverBloqueio}
+                    >
+                      {aRemoverBloqueio ? "A bloquear..." : "Voltar a bloquear"}
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  onClick={removerBloqueio}
+                  style={estilos.botaoRemoverStyle}
+                  disabled={aRemoverBloqueio}
+                >
+                  {aRemoverBloqueio ? "A remover..." : "Remover Bloqueio"}
+                </button>
+                <button
+                  type="button"
+                  onClick={guardarBloqueio}
+                  style={estilos.botaoPrincipalStyle}
+                  disabled={aGuardarBloqueio}
+                >
+                  {aGuardarBloqueio ? "A guardar..." : "Guardar Bloqueio"}
+                </button>
               </div>
             </div>
           </div>
@@ -1628,14 +2871,14 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
   return {
     mainStyle: {
       minHeight: "100dvh",
-      background: "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
+      background:
+        "radial-gradient(circle at top, #343d68 0%, #1f2540 45%, #171c33 100%)",
       color: "white",
       display: "flex",
       flexDirection: eDesktop ? "row" : "column",
       overflowX: "hidden",
       fontFamily: "Arial, sans-serif",
     } satisfies CSSProperties,
-
     asideStyle: {
       width: eDesktop ? "260px" : "100%",
       minHeight: eDesktop ? "100dvh" : "auto",
@@ -1646,7 +2889,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       flexShrink: 0,
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
     contentStyle: {
       flex: 1,
       padding: eDesktop ? "40px" : eTablet ? "20px" : "16px",
@@ -1655,13 +2897,39 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       overflowX: "hidden",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
+    heroCardStyle: {
+      width: "100%",
+      padding: eDesktop ? "24px" : "18px",
+      borderRadius: "20px",
+      background:
+        "linear-gradient(180deg, rgba(92,115,199,0.18) 0%, rgba(255,255,255,0.05) 100%)",
+      border: "1px solid rgba(255,255,255,0.10)",
+      marginBottom: "18px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: eDesktop ? "center" : "flex-start",
+      flexDirection: eDesktop ? "row" : "column",
+      gap: "16px",
+      boxSizing: "border-box",
+    } satisfies CSSProperties,
+    heroEyebrowStyle: {
+      fontSize: "12px",
+      textTransform: "uppercase",
+      letterSpacing: "1px",
+      opacity: 0.72,
+      fontWeight: "bold",
+    } satisfies CSSProperties,
+    heroTextStyle: {
+      opacity: 0.82,
+      marginTop: "10px",
+      lineHeight: 1.4,
+      marginBottom: 0,
+    } satisfies CSSProperties,
     logoStyle: {
       fontSize: eDesktop ? "38px" : "28px",
       letterSpacing: eDesktop ? "10px" : "6px",
       marginBottom: eDesktop ? "40px" : "18px",
     } satisfies CSSProperties,
-
     menuContainerStyle: {
       display: "flex",
       flexDirection: eDesktop ? "column" : "row",
@@ -1669,7 +2937,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       overflowX: eDesktop ? "visible" : "auto",
       paddingBottom: eDesktop ? 0 : "4px",
     } satisfies CSSProperties,
-
     menuStyle: {
       padding: "12px 14px",
       borderRadius: "10px",
@@ -1681,43 +2948,30 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       flexShrink: 0,
       fontWeight: "bold",
     } satisfies CSSProperties,
-
-    heroCardStyle: {
-      width: "100%",
-      padding: eDesktop ? "24px" : "18px",
-      borderRadius: "20px",
-      background: "linear-gradient(180deg, rgba(92,115,199,0.18) 0%, rgba(255,255,255,0.05) 100%)",
-      border: "1px solid rgba(255,255,255,0.10)",
-      marginBottom: "18px",
+    tabsStyle: {
       display: "flex",
-      justifyContent: "space-between",
-      alignItems: eDesktop ? "center" : "flex-start",
-      flexDirection: eDesktop ? "row" : "column",
-      gap: "16px",
-      boxSizing: "border-box",
+      gap: "10px",
+      marginBottom: "16px",
+      flexWrap: "wrap",
     } satisfies CSSProperties,
-
-    heroEyebrowStyle: {
-      fontSize: "12px",
-      textTransform: "uppercase",
-      letterSpacing: "1px",
-      opacity: 0.72,
+    tabStyle: {
+      padding: "12px 16px",
+      borderRadius: "999px",
+      border: "1px solid rgba(255,255,255,0.10)",
+      background: "rgba(255,255,255,0.06)",
+      color: "white",
       fontWeight: "bold",
+      cursor: "pointer",
     } satisfies CSSProperties,
-
-    heroTextStyle: {
-      opacity: 0.82,
-      marginTop: "10px",
-      lineHeight: 1.4,
-      marginBottom: 0,
+    tabAtivaStyle: {
+      background: "linear-gradient(180deg, #5c73c7 0%, #4057a8 100%)",
+      border: "1px solid rgba(255,255,255,0.18)",
     } satisfies CSSProperties,
-
     navegacaoStyle: {
       display: "flex",
       gap: "8px",
       flexWrap: "wrap",
     } satisfies CSSProperties,
-
     botaoCalendarioStyle: {
       background: "rgba(255,255,255,0.08)",
       color: "white",
@@ -1728,43 +2982,12 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       cursor: "pointer",
       fontSize: "14px",
     } satisfies CSSProperties,
-
-    tabsStyle: {
-      display: "flex",
-      gap: "10px",
-      marginBottom: "16px",
-      flexWrap: "wrap",
-    } satisfies CSSProperties,
-
-    tabStyle: {
-      padding: "12px 16px",
-      borderRadius: "999px",
-      border: "1px solid rgba(255,255,255,0.10)",
-      background: "rgba(255,255,255,0.06)",
-      color: "white",
-      fontWeight: "bold",
-      cursor: "pointer",
-    } satisfies CSSProperties,
-
-    tabAtivaStyle: {
-      background: "linear-gradient(180deg, #5c73c7 0%, #4057a8 100%)",
-      border: "1px solid rgba(255,255,255,0.18)",
-    } satisfies CSSProperties,
-
-    mesAtualStyle: {
-      fontSize: eDesktop ? "26px" : "22px",
-      fontWeight: "bold",
-      marginBottom: "14px",
-      textTransform: "capitalize",
-    } satisfies CSSProperties,
-
     filtrosWrapStyle: {
       display: "grid",
       gridTemplateColumns: eDesktop ? "1.3fr 0.7fr 0.7fr auto" : "1fr",
       gap: "10px",
       marginBottom: "16px",
     } satisfies CSSProperties,
-
     inputFiltroStyle: {
       width: "100%",
       padding: "12px 14px",
@@ -1775,7 +2998,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       outline: "none",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
     selectFiltroStyle: {
       width: "100%",
       padding: "12px 14px",
@@ -1786,7 +3008,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       outline: "none",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
     botaoLimparStyle: {
       background: "rgba(255,255,255,0.08)",
       color: "white",
@@ -1797,7 +3018,37 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       cursor: "pointer",
       width: eDesktop ? "auto" : "100%",
     } satisfies CSSProperties,
-
+    mesAtualStyle: {
+      fontSize: eDesktop ? "26px" : "22px",
+      fontWeight: "bold",
+      marginBottom: "14px",
+      textTransform: "capitalize",
+    } satisfies CSSProperties,
+    resumoGridStyle: {
+      display: "grid",
+      gridTemplateColumns: eDesktop
+        ? "repeat(5, minmax(0, 1fr))"
+        : eTablet
+          ? "repeat(3, minmax(0, 1fr))"
+          : "repeat(2, minmax(0, 1fr))",
+      gap: "10px",
+      width: "100%",
+      marginBottom: "16px",
+    } satisfies CSSProperties,
+    resumoCardStyle: {
+      padding: eDesktop ? "20px" : "16px",
+      borderRadius: "14px",
+      background: "rgba(255,255,255,0.06)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      minWidth: 0,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+    } satisfies CSSProperties,
+    resumoNumeroStyle: {
+      fontSize: eDesktop ? "30px" : "22px",
+      fontWeight: "bold",
+      marginBottom: "6px",
+      wordBreak: "break-word",
+    } satisfies CSSProperties,
     cardStyle: {
       width: "100%",
       padding: eDesktop ? "24px" : "16px",
@@ -1809,19 +3060,16 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
     metaEditorWrapStyle: {
       display: "grid",
       gridTemplateColumns: eDesktop ? "1.2fr 1fr auto" : "1fr",
       gap: "12px",
       alignItems: "end",
     } satisfies CSSProperties,
-
     metaEditorCampoStyle: {
       display: "grid",
       gap: "8px",
     } satisfies CSSProperties,
-
     metaInfoCardStyle: {
       padding: "12px",
       borderRadius: "12px",
@@ -1829,241 +3077,22 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       border: "1px solid rgba(255,255,255,0.08)",
       minWidth: 0,
     } satisfies CSSProperties,
-
     metaInfoTituloStyle: {
       fontSize: "12px",
       opacity: 0.8,
       marginBottom: "6px",
     } satisfies CSSProperties,
-
     metaInfoValorStyle: {
       fontSize: eDesktop ? "22px" : "18px",
       fontWeight: "bold",
       wordBreak: "break-word",
     } satisfies CSSProperties,
-
     metaAjudaStyle: {
       marginTop: "12px",
       opacity: 0.8,
       fontSize: "13px",
       lineHeight: 1.35,
     } satisfies CSSProperties,
-
-    mensagemStyle: {
-      width: "100%",
-      marginBottom: "16px",
-      padding: "14px 16px",
-      borderRadius: "12px",
-      background: "rgba(180,50,50,0.18)",
-      border: "1px solid rgba(180,50,50,0.35)",
-      boxSizing: "border-box",
-      wordBreak: "break-word",
-    } satisfies CSSProperties,
-
-    resumoGridStyle: {
-      display: "grid",
-      gridTemplateColumns: eDesktop ? "repeat(5, minmax(0, 1fr))" : eTablet ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))",
-      gap: "10px",
-      width: "100%",
-      marginBottom: "16px",
-    } satisfies CSSProperties,
-
-    resumoCardStyle: {
-      padding: eDesktop ? "20px" : "16px",
-      borderRadius: "14px",
-      background: "rgba(255,255,255,0.06)",
-      border: "1px solid rgba(255,255,255,0.08)",
-      minWidth: 0,
-      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-    } satisfies CSSProperties,
-
-    resumoNumeroStyle: {
-      fontSize: eDesktop ? "30px" : "22px",
-      fontWeight: "bold",
-      marginBottom: "6px",
-      wordBreak: "break-word",
-    } satisfies CSSProperties,
-
-    alertasGridStyle: {
-      display: "grid",
-      gridTemplateColumns: eDesktop ? "repeat(4, minmax(0, 1fr))" : eTablet ? "repeat(2, minmax(0, 1fr))" : "1fr",
-      gap: "10px",
-    } satisfies CSSProperties,
-
-    alertaCardStyle: {
-      padding: "12px",
-      borderRadius: "12px",
-      minWidth: 0,
-    } satisfies CSSProperties,
-
-    alertaTituloStyle: {
-      fontWeight: "bold",
-      marginBottom: "6px",
-    } satisfies CSSProperties,
-
-    alertaTextoStyle: {
-      fontSize: "13px",
-      lineHeight: 1.35,
-      opacity: 0.9,
-    } satisfies CSSProperties,
-
-    alertaDataStyle: {
-      marginTop: "8px",
-      fontSize: "12px",
-      fontWeight: "bold",
-    } satisfies CSSProperties,
-
-    tituloComAcoesStyle: {
-      display: "flex",
-      alignItems: eDesktop ? "center" : "stretch",
-      justifyContent: "space-between",
-      gap: "12px",
-      flexDirection: eDesktop ? "row" : "column",
-    } satisfies CSSProperties,
-
-    timelineGridStyle: {
-      display: "grid",
-      gap: "12px",
-      marginTop: "14px",
-    } satisfies CSSProperties,
-
-    timelineCardStyle: {
-      padding: "14px",
-      borderRadius: "14px",
-      background: "rgba(255,255,255,0.045)",
-      border: "1px solid rgba(255,255,255,0.08)",
-    } satisfies CSSProperties,
-
-    cabecalhoCartaoStyle: {
-      display: "flex",
-      justifyContent: "space-between",
-      gap: "12px",
-      flexWrap: "wrap",
-      alignItems: "flex-start",
-    } satisfies CSSProperties,
-
-    botaoHeaderCartaoStyle: {
-      background: "transparent",
-      border: "none",
-      color: "white",
-      padding: 0,
-      textAlign: "left",
-      cursor: "pointer",
-      flex: 1,
-      minWidth: 0,
-    } satisfies CSSProperties,
-
-    timelineTituloStyle: {
-      fontWeight: "bold",
-      fontSize: "16px",
-    } satisfies CSSProperties,
-
-    subtextoStyle: {
-      opacity: 0.8,
-      fontSize: "13px",
-      marginTop: "4px",
-      lineHeight: 1.35,
-      wordBreak: "break-word",
-    } satisfies CSSProperties,
-
-    badgesWrapStyle: {
-      display: "flex",
-      gap: "8px",
-      flexWrap: "wrap",
-      justifyContent: eDesktop ? "flex-end" : "flex-start",
-    } satisfies CSSProperties,
-
-    manualBadgeStyle: {
-      display: "inline-block",
-      padding: "6px 9px",
-      borderRadius: "999px",
-      background: "rgba(244,180,0,0.16)",
-      border: "1px solid rgba(244,180,0,0.35)",
-      color: "#ffd76c",
-      fontWeight: "bold",
-      fontSize: "12px",
-      height: "fit-content",
-      marginTop: "8px",
-    } satisfies CSSProperties,
-
-    arquivadoBadgeStyle: {
-      display: "inline-block",
-      padding: "6px 9px",
-      borderRadius: "999px",
-      background: "rgba(160,82,45,0.18)",
-      border: "1px solid rgba(160,82,45,0.35)",
-      color: "#ffc39d",
-      fontWeight: "bold",
-      fontSize: "12px",
-      height: "fit-content",
-      marginTop: "8px",
-    } satisfies CSSProperties,
-
-    timelineBadgeStyle: {
-      padding: "7px 10px",
-      borderRadius: "999px",
-      background: "rgba(66,133,244,0.18)",
-      border: "1px solid rgba(66,133,244,0.35)",
-      color: "#9fc3ff",
-      fontWeight: "bold",
-      fontSize: "12px",
-      height: "fit-content",
-    } satisfies CSSProperties,
-
-    timelineDatasStyle: {
-      display: "grid",
-      gridTemplateColumns: eDesktop ? "repeat(4, minmax(0, 1fr))" : "1fr",
-      gap: "8px",
-      marginTop: "10px",
-      fontSize: "13px",
-      opacity: 0.88,
-    } satisfies CSSProperties,
-
-    acoesInlineStyle: {
-      display: "flex",
-      gap: "8px",
-      flexWrap: "wrap",
-      alignItems: "center",
-      marginTop: "10px",
-    } satisfies CSSProperties,
-
-    gestaoGridStyle: {
-      display: "grid",
-      gridTemplateColumns: eDesktop ? "1.2fr 0.8fr 1fr" : "1fr",
-      gap: "12px",
-      marginTop: "12px",
-    } satisfies CSSProperties,
-
-    editarAcabamentoBoxStyle: {
-      marginTop: "12px",
-      padding: "12px",
-      borderRadius: "10px",
-      background: "rgba(66,133,244,0.12)",
-      border: "1px solid rgba(66,133,244,0.30)",
-      display: "grid",
-      gap: "10px",
-    } satisfies CSSProperties,
-
-    formGridStyle: {
-      display: "grid",
-      gridTemplateColumns: "1fr",
-      gap: "8px",
-    } satisfies CSSProperties,
-
-    smallLabelStyle: {
-      opacity: 0.8,
-      fontSize: "12px",
-      fontWeight: "bold",
-      marginTop: "4px",
-    } satisfies CSSProperties,
-
-    editarAcabamentoGridStyle: {
-      display: "grid",
-      gridTemplateColumns: eDesktop ? "1fr auto" : "1fr",
-      gap: "10px",
-      alignItems: "center",
-    } satisfies CSSProperties,
-
     calendarCardStyle: {
       width: "100%",
       borderRadius: "16px",
@@ -2074,13 +3103,21 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
+    mensagemStyle: {
+      width: "100%",
+      marginBottom: "16px",
+      padding: "14px 16px",
+      borderRadius: "12px",
+      background: "rgba(180,50,50,0.18)",
+      border: "1px solid rgba(180,50,50,0.35)",
+      boxSizing: "border-box",
+      wordBreak: "break-word",
+    } satisfies CSSProperties,
     diasSemanaHeaderStyle: {
       display: "grid",
       gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
       borderBottom: "1px solid rgba(255,255,255,0.08)",
     } satisfies CSSProperties,
-
     diaSemanaHeaderItemStyle: {
       padding: eDesktop ? "14px 10px" : "10px 4px",
       textAlign: "center",
@@ -2090,12 +3127,10 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       fontSize: eDesktop ? "13px" : "12px",
       minWidth: 0,
     } satisfies CSSProperties,
-
     grelhaMesStyle: {
       display: "grid",
       gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
     } satisfies CSSProperties,
-
     diaMesCardStyle: {
       minHeight: eDesktop ? "185px" : eTablet ? "140px" : "118px",
       padding: eDesktop ? "10px" : "6px",
@@ -2111,14 +3146,12 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       color: "white",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
     topoDiaStyle: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "flex-start",
       gap: "4px",
     } satisfies CSSProperties,
-
     numeroDiaStyle: {
       width: eDesktop ? "28px" : "24px",
       height: eDesktop ? "28px" : "24px",
@@ -2130,7 +3163,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       fontSize: eDesktop ? "14px" : "12px",
       flexShrink: 0,
     } satisfies CSSProperties,
-
     financeBadgeStyle: {
       fontSize: eDesktop ? "11px" : "10px",
       fontWeight: "bold",
@@ -2141,7 +3173,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       overflow: "hidden",
       textOverflow: "ellipsis",
     } satisfies CSSProperties,
-
     eventosDiaStyle: {
       display: "grid",
       gap: eDesktop ? "6px" : "4px",
@@ -2150,7 +3181,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       alignContent: "start",
       minWidth: 0,
     } satisfies CSSProperties,
-
     eventoStyle: {
       fontSize: eDesktop ? "12px" : "10px",
       fontWeight: "bold",
@@ -2162,18 +3192,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       minWidth: 0,
       color: "white",
     } satisfies CSSProperties,
-
-    diaVazioStyle: {
-      opacity: 0.28,
-      fontSize: "11px",
-    } satisfies CSSProperties,
-
-    maisEventosStyle: {
-      fontSize: eDesktop ? "12px" : "10px",
-      opacity: 0.75,
-      fontWeight: "bold",
-    } satisfies CSSProperties,
-
     rodapeFinanceiroDiaStyle: {
       marginTop: "2px",
       padding: eDesktop ? "8px" : "6px",
@@ -2183,7 +3201,186 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       gap: "2px",
       minWidth: 0,
     } satisfies CSSProperties,
-
+    diaVazioStyle: { opacity: 0.28, fontSize: "11px" } satisfies CSSProperties,
+    maisEventosStyle: {
+      fontSize: eDesktop ? "12px" : "10px",
+      opacity: 0.75,
+      fontWeight: "bold",
+    } satisfies CSSProperties,
+    subtextoStyle: {
+      opacity: 0.8,
+      fontSize: "13px",
+      marginTop: "4px",
+      lineHeight: 1.35,
+      wordBreak: "break-word",
+    } satisfies CSSProperties,
+    smallLabelStyle: {
+      opacity: 0.8,
+      fontSize: "12px",
+      fontWeight: "bold",
+      marginTop: "4px",
+    } satisfies CSSProperties,
+    alertasGridStyle: {
+      display: "grid",
+      gridTemplateColumns: eDesktop
+        ? "repeat(4, minmax(0, 1fr))"
+        : eTablet
+          ? "repeat(2, minmax(0, 1fr))"
+          : "1fr",
+      gap: "10px",
+    } satisfies CSSProperties,
+    alertaCardStyle: {
+      padding: "12px",
+      borderRadius: "12px",
+      minWidth: 0,
+    } satisfies CSSProperties,
+    alertaTituloStyle: {
+      fontWeight: "bold",
+      marginBottom: "6px",
+    } satisfies CSSProperties,
+    alertaTextoStyle: {
+      fontSize: "13px",
+      lineHeight: 1.35,
+      opacity: 0.9,
+    } satisfies CSSProperties,
+    alertaDataStyle: {
+      marginTop: "8px",
+      fontSize: "12px",
+      fontWeight: "bold",
+    } satisfies CSSProperties,
+    timelineGridStyle: {
+      display: "grid",
+      gap: "12px",
+      marginTop: "14px",
+    } satisfies CSSProperties,
+    timelineCardStyle: {
+      padding: "14px",
+      borderRadius: "14px",
+      background: "rgba(255,255,255,0.045)",
+      border: "1px solid rgba(255,255,255,0.08)",
+    } satisfies CSSProperties,
+    tituloComAcoesStyle: {
+      display: "flex",
+      alignItems: eDesktop ? "center" : "stretch",
+      justifyContent: "space-between",
+      gap: "12px",
+      flexDirection: eDesktop ? "row" : "column",
+    } satisfies CSSProperties,
+    cabecalhoCartaoStyle: {
+      display: "flex",
+      justifyContent: "space-between",
+      gap: "12px",
+      flexWrap: "wrap",
+      alignItems: "flex-start",
+    } satisfies CSSProperties,
+    botaoHeaderCartaoStyle: {
+      background: "transparent",
+      border: "none",
+      color: "white",
+      padding: 0,
+      textAlign: "left",
+      cursor: "pointer",
+      flex: 1,
+      minWidth: 0,
+    } satisfies CSSProperties,
+    badgesWrapStyle: {
+      display: "flex",
+      gap: "8px",
+      flexWrap: "wrap",
+      justifyContent: eDesktop ? "flex-end" : "flex-start",
+    } satisfies CSSProperties,
+    timelineTituloStyle: {
+      fontWeight: "bold",
+      fontSize: "16px",
+    } satisfies CSSProperties,
+    timelineBadgeStyle: {
+      padding: "7px 10px",
+      borderRadius: "999px",
+      background: "rgba(66,133,244,0.18)",
+      border: "1px solid rgba(66,133,244,0.35)",
+      color: "#9fc3ff",
+      fontWeight: "bold",
+      fontSize: "12px",
+      height: "fit-content",
+    } satisfies CSSProperties,
+    manualBadgeStyle: {
+      display: "inline-block",
+      padding: "6px 9px",
+      borderRadius: "999px",
+      background: "rgba(244,180,0,0.16)",
+      border: "1px solid rgba(244,180,0,0.35)",
+      color: "#ffd76c",
+      fontWeight: "bold",
+      fontSize: "12px",
+      height: "fit-content",
+      marginTop: "8px",
+    } satisfies CSSProperties,
+    arquivadoBadgeStyle: {
+      display: "inline-block",
+      padding: "6px 9px",
+      borderRadius: "999px",
+      background: "rgba(160,82,45,0.18)",
+      border: "1px solid rgba(160,82,45,0.35)",
+      color: "#ffc39d",
+      fontWeight: "bold",
+      fontSize: "12px",
+      height: "fit-content",
+      marginTop: "8px",
+    } satisfies CSSProperties,
+    timelineBarraWrapStyle: {
+      marginTop: "12px",
+      height: "10px",
+      borderRadius: "999px",
+      background: "rgba(255,255,255,0.08)",
+      overflow: "hidden",
+    } satisfies CSSProperties,
+    timelineBarraStyle: {
+      height: "100%",
+      width: "100%",
+      borderRadius: "999px",
+      background:
+        "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(66,133,244,0.95))",
+    } satisfies CSSProperties,
+    timelineDatasStyle: {
+      display: "grid",
+      gridTemplateColumns: eDesktop ? "repeat(4, minmax(0, 1fr))" : "1fr",
+      gap: "8px",
+      marginTop: "10px",
+      fontSize: "13px",
+      opacity: 0.88,
+    } satisfies CSSProperties,
+    gestaoGridStyle: {
+      display: "grid",
+      gridTemplateColumns: eDesktop ? "1.2fr 1.2fr 0.8fr" : "1fr",
+      gap: "12px",
+      marginTop: "12px",
+    } satisfies CSSProperties,
+    editarAcabamentoBoxStyle: {
+      marginTop: "12px",
+      padding: "12px",
+      borderRadius: "10px",
+      background: "rgba(66,133,244,0.12)",
+      border: "1px solid rgba(66,133,244,0.30)",
+      display: "grid",
+      gap: "10px",
+    } satisfies CSSProperties,
+    editarAcabamentoGridStyle: {
+      display: "grid",
+      gridTemplateColumns: eDesktop ? "1fr auto" : "1fr",
+      gap: "10px",
+      alignItems: "center",
+    } satisfies CSSProperties,
+    formGridStyle: {
+      display: "grid",
+      gridTemplateColumns: "1fr",
+      gap: "8px",
+    } satisfies CSSProperties,
+    acoesInlineStyle: {
+      display: "flex",
+      gap: "8px",
+      flexWrap: "wrap",
+      alignItems: "center",
+    } satisfies CSSProperties,
     overlayStyle: {
       position: "fixed",
       inset: 0,
@@ -2194,7 +3391,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       padding: "16px",
       zIndex: 1000,
     } satisfies CSSProperties,
-
     modalStyle: {
       width: "100%",
       maxWidth: "720px",
@@ -2207,31 +3403,26 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
     modalResumoGridStyle: {
       display: "grid",
       gridTemplateColumns: eDesktop ? "repeat(3, minmax(0, 1fr))" : "1fr",
       gap: "10px",
     } satisfies CSSProperties,
-
     modalResumoCardStyle: {
       padding: "12px",
       borderRadius: "12px",
       background: "rgba(255,255,255,0.05)",
       border: "1px solid rgba(255,255,255,0.08)",
     } satisfies CSSProperties,
-
     modalResumoTituloStyle: {
       fontSize: "12px",
       opacity: 0.8,
       marginBottom: "6px",
     } satisfies CSSProperties,
-
     modalResumoValorStyle: {
       fontSize: "20px",
       fontWeight: "bold",
     } satisfies CSSProperties,
-
     bloqueioInfoStyle: {
       marginTop: "10px",
       marginBottom: "14px",
@@ -2240,7 +3431,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       background: "rgba(160,82,45,0.18)",
       border: "1px solid rgba(160,82,45,0.35)",
     } satisfies CSSProperties,
-
     desbloqueioInfoStyle: {
       marginTop: "10px",
       marginBottom: "14px",
@@ -2249,14 +3439,12 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       background: "rgba(52,168,83,0.16)",
       border: "1px solid rgba(52,168,83,0.35)",
     } satisfies CSSProperties,
-
     processoDiaCardStyle: {
       padding: "12px",
       borderRadius: "10px",
       background: "rgba(255,255,255,0.05)",
       border: "1px solid rgba(255,255,255,0.08)",
     } satisfies CSSProperties,
-
     semItensStyle: {
       padding: "12px",
       borderRadius: "10px",
@@ -2264,14 +3452,12 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       border: "1px solid rgba(255,255,255,0.08)",
       opacity: 0.8,
     } satisfies CSSProperties,
-
     labelStyle: {
       display: "block",
       marginBottom: "8px",
       fontWeight: "bold",
       fontSize: "14px",
     } satisfies CSSProperties,
-
     textareaStyle: {
       width: "100%",
       minHeight: "110px",
@@ -2284,7 +3470,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       fontSize: "14px",
       boxSizing: "border-box",
     } satisfies CSSProperties,
-
     modalAcoesStyle: {
       marginTop: "16px",
       display: "flex",
@@ -2293,7 +3478,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       justifyContent: eDesktop ? "flex-end" : "stretch",
       flexWrap: "wrap",
     } satisfies CSSProperties,
-
     botaoPrincipalStyle: {
       background: "linear-gradient(180deg, #5c73c7 0%, #4057a8 100%)",
       color: "white",
@@ -2304,7 +3488,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       cursor: "pointer",
       width: eDesktop ? "auto" : "100%",
     } satisfies CSSProperties,
-
     botaoSecundarioStyle: {
       background: "rgba(255,255,255,0.08)",
       color: "white",
@@ -2315,7 +3498,6 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       cursor: "pointer",
       width: eDesktop ? "auto" : "100%",
     } satisfies CSSProperties,
-
     botaoRemoverStyle: {
       background: "rgba(180,50,50,0.18)",
       color: "white",
@@ -2328,3 +3510,4 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
     } satisfies CSSProperties,
   };
 }
+
