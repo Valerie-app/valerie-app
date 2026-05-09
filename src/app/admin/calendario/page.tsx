@@ -3510,4 +3510,3 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
     } satisfies CSSProperties,
   };
 }
-
