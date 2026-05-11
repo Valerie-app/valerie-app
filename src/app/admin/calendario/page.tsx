@@ -737,155 +737,220 @@ export default function AdminCalendarioPage() {
   }
 
   function calcularPlaneamentos(listaProcessos: ProcessoCalendario[]) {
-    const hoje = hojeSemHoras();
+  const hoje = hojeSemHoras();
 
-    // Função auxiliar: estima a data de montagem para ordenação
-    function estimarDataMontagem(p: ProcessoCalendario): number {
-      // 1. Montagem manual definida — usa diretamente
-      if (p.data_inicio_montagem_manual) {
-        return parseDateOnly(p.data_inicio_montagem_manual).getTime();
+  function obterDiasMontagemNecessarios(p: ProcessoCalendario) {
+    const diasBase = Math.max(Number(p.dias_montagem_previstos || 0), 0);
+    return Math.ceil(diasBase / TAXA_CAPACIDADE_MONTAGENS);
+  }
+
+  function estimarDataLimiteProducao(p: ProcessoCalendario): number {
+    const diasProd = obterDiasProducaoNecessarios(p);
+    const diasAcab = obterDiasAcabamentoNecessarios(p);
+    const diasMont = obterDiasMontagemNecessarios(p);
+
+    let dataReferencia: Date | null = null;
+
+    if (p.data_inicio_acabamento_manual) {
+      dataReferencia = diaUtilAnterior(parseDateOnly(p.data_inicio_acabamento_manual));
+    } else if (p.data_fim_acabamento_manual && diasAcab > 0) {
+      const datasAcab = subtrairDiasUteisAteFim(
+        parseDateOnly(p.data_fim_acabamento_manual),
+        diasAcab,
+      );
+      dataReferencia = datasAcab[0]
+        ? diaUtilAnterior(parseDateOnly(datasAcab[0]))
+        : parseDateOnly(p.data_fim_acabamento_manual);
+    } else if (p.data_inicio_montagem_manual && diasAcab > 0) {
+      const fimAcabamento = diaUtilAnterior(parseDateOnly(p.data_inicio_montagem_manual));
+      const datasAcab = subtrairDiasUteisAteFim(fimAcabamento, diasAcab);
+      dataReferencia = datasAcab[0]
+        ? diaUtilAnterior(parseDateOnly(datasAcab[0]))
+        : fimAcabamento;
+    } else if (p.data_inicio_montagem_manual) {
+      dataReferencia = diaUtilAnterior(parseDateOnly(p.data_inicio_montagem_manual));
+    } else if (p.data_entrega_prevista) {
+      let data = parseDateOnly(p.data_entrega_prevista);
+
+      if (diasMont > 0) {
+        const datasMont = subtrairDiasUteisAteFim(data, diasMont);
+        data = datasMont[0] ? diaUtilAnterior(parseDateOnly(datasMont[0])) : data;
       }
 
-      // 2. Sem montagem manual: estima fim_produção + dias_acabamento
+      if (diasAcab > 0) {
+        const datasAcab = subtrairDiasUteisAteFim(data, diasAcab);
+        data = datasAcab[0] ? diaUtilAnterior(parseDateOnly(datasAcab[0])) : data;
+      }
+
+      dataReferencia = data;
+    }
+
+    if (!dataReferencia) {
       const dataBase = p.data_inicio_prevista
         ? parseDateOnly(p.data_inicio_prevista)
-        : hoje;
+        : p.created_at
+          ? new Date(p.created_at)
+          : hoje;
+
       const dataBaseReal = maxData(dataBase, hoje);
-      const diasProd = obterDiasProducaoNecessarios(p);
-      const diasAcab = obterDiasAcabamentoNecessarios(p);
-      const totalDias = diasProd + diasAcab;
-
-      if (totalDias <= 0) {
-        // Sem dados suficientes: usa data de entrega prevista ou created_at
-        if (p.data_entrega_prevista)
-          return parseDateOnly(p.data_entrega_prevista).getTime();
-        if (p.created_at) return new Date(p.created_at).getTime();
-        return Infinity;
-      }
-
       const datasEstimadas = adicionarDiasUteis(
         proximoDiaUtil(dataBaseReal),
-        totalDias,
+        diasProd + diasAcab + diasMont,
       );
+
       const fimEstimado = datasEstimadas[datasEstimadas.length - 1];
       return fimEstimado ? parseDateOnly(fimEstimado).getTime() : Infinity;
     }
 
-    // Ordena: quem tem montagem mais cedo (manual ou estimada) produz primeiro
-    const processosOrdenados = [...listaProcessos].sort((a, b) => {
-      return estimarDataMontagem(a) - estimarDataMontagem(b);
-    });
+    return dataReferencia.getTime();
+  }
 
-    const resultado: PlaneamentoProcesso[] = [];
-    const cargaProducaoPorDia: Record<string, number> = {};
+  const processosOrdenados = [...listaProcessos].sort((a, b) => {
+    const prioridadeA = estimarDataLimiteProducao(a);
+    const prioridadeB = estimarDataLimiteProducao(b);
 
-    for (const processo of processosOrdenados) {
-      const datasProducaoManuais = obterIntervaloDiasUteis(
-        processo.data_inicio_producao_manual || null,
-        processo.data_fim_producao_manual || null,
-      );
-      const datasMontagemManuais = obterIntervaloDiasUteis(
-        processo.data_inicio_montagem_manual || null,
-        processo.data_fim_montagem_manual || null,
-      );
-      const temProducaoManual = datasProducaoManuais.length > 0;
-      const temMontagemManual = datasMontagemManuais.length > 0;
-      let datasProducao: string[] = [];
-      const valorProducaoPorDia: Record<string, number> = {};
-      const valorTotalProcesso = obterValorFinanceiroProcesso(processo);
+    if (prioridadeA !== prioridadeB) return prioridadeA - prioridadeB;
 
-      if (temProducaoManual) {
-        datasProducao = datasProducaoManuais;
-        if (datasProducao.length > 0) {
-          const valorPorDiaManual = valorTotalProcesso / datasProducao.length;
-          for (const dataManual of datasProducao) {
-            valorProducaoPorDia[dataManual] = valorPorDiaManual;
-            cargaProducaoPorDia[dataManual] =
-              (cargaProducaoPorDia[dataManual] || 0) + valorPorDiaManual;
-          }
-        }
-      } else {
-        const dataInicioOriginal = processo.data_inicio_prevista
-          ? parseDateOnly(processo.data_inicio_prevista)
-          : hoje;
-        const dataInicioPreferida = maxData(dataInicioOriginal, hoje);
-        let cursor = proximoDiaUtil(dataInicioPreferida);
-        let valorRestante = valorTotalProcesso;
-        let seguranca = 0;
+    const acabA = obterDiasAcabamentoNecessarios(a);
+    const acabB = obterDiasAcabamentoNecessarios(b);
 
-        while (valorRestante > 0.009 && seguranca < 1460) {
-          const chave = formatarDataISO(cursor);
-          if (eDiaUtil(cursor)) {
-            const cargaAtual = cargaProducaoPorDia[chave] || 0;
-            const capacidadeDia =
-              resumo.objetivoDiario > 0
-                ? Math.max(resumo.objetivoDiario - cargaAtual, 0)
-                : valorRestante;
-            if (capacidadeDia > 0) {
-              const valorAReservar = Math.min(valorRestante, capacidadeDia);
-              if (!datasProducao.includes(chave)) datasProducao.push(chave);
-              valorProducaoPorDia[chave] =
-                (valorProducaoPorDia[chave] || 0) + valorAReservar;
-              cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
-              valorRestante -= valorAReservar;
-            }
-          }
-          cursor.setDate(cursor.getDate() + 1);
-          seguranca += 1;
-        }
+    if (acabA !== acabB) return acabB - acabA;
 
-        if (datasProducao.length === 0) {
-          const diasFallback = obterDiasProducaoNecessarios(processo);
-          datasProducao = adicionarDiasUteis(dataInicioPreferida, diasFallback);
-          const valorFallback =
-            datasProducao.length > 0
-              ? valorTotalProcesso / datasProducao.length
-              : 0;
-          for (const dataFallback of datasProducao) {
-            valorProducaoPorDia[dataFallback] = valorFallback;
-            cargaProducaoPorDia[dataFallback] =
-              (cargaProducaoPorDia[dataFallback] || 0) + valorFallback;
-          }
+    const entregaA = a.data_entrega_prevista
+      ? parseDateOnly(a.data_entrega_prevista).getTime()
+      : Infinity;
+    const entregaB = b.data_entrega_prevista
+      ? parseDateOnly(b.data_entrega_prevista).getTime()
+      : Infinity;
+
+    return entregaA - entregaB;
+  });
+
+  const resultado: PlaneamentoProcesso[] = [];
+  const cargaProducaoPorDia: Record<string, number> = {};
+
+  for (const processo of processosOrdenados) {
+    const datasProducaoManuais = obterIntervaloDiasUteis(
+      processo.data_inicio_producao_manual || null,
+      processo.data_fim_producao_manual || null,
+    );
+    const datasMontagemManuais = obterIntervaloDiasUteis(
+      processo.data_inicio_montagem_manual || null,
+      processo.data_fim_montagem_manual || null,
+    );
+
+    const temProducaoManual = datasProducaoManuais.length > 0;
+    const temMontagemManual = datasMontagemManuais.length > 0;
+
+    let datasProducao: string[] = [];
+    const valorProducaoPorDia: Record<string, number> = {};
+    const valorTotalProcesso = obterValorFinanceiroProcesso(processo);
+
+    if (temProducaoManual) {
+      datasProducao = datasProducaoManuais;
+
+      if (datasProducao.length > 0) {
+        const valorPorDiaManual = valorTotalProcesso / datasProducao.length;
+
+        for (const dataManual of datasProducao) {
+          valorProducaoPorDia[dataManual] = valorPorDiaManual;
+          cargaProducaoPorDia[dataManual] =
+            (cargaProducaoPorDia[dataManual] || 0) + valorPorDiaManual;
         }
       }
+    } else {
+      const dataInicioOriginal = processo.data_inicio_prevista
+        ? parseDateOnly(processo.data_inicio_prevista)
+        : hoje;
 
-      const fimProducao = datasProducao[datasProducao.length - 1] || null;
-      const datasAcabamento = calcularAcabamentosSemMexerNaProducao(
-        processo,
-        fimProducao,
-      );
-      const inicioAcabamento = datasAcabamento[0] || null;
-      const fimAcabamento = datasAcabamento[datasAcabamento.length - 1] || null;
-      const datasMontagem = temMontagemManual ? datasMontagemManuais : [];
-      const inicioMontagem = datasMontagem[0] || null;
-      const fimMontagem = datasMontagem[datasMontagem.length - 1] || null;
-      const dataEntregaCalculada = fimMontagem || fimAcabamento || fimProducao;
-      const temAcabamentoManual =
-        !!processo.data_inicio_acabamento_manual ||
-        !!processo.data_fim_acabamento_manual ||
-        (!!processo.data_inicio_montagem_manual &&
-          obterDiasAcabamentoNecessarios(processo) > 0);
+      const dataInicioPreferida = maxData(dataInicioOriginal, hoje);
+      let cursor = proximoDiaUtil(dataInicioPreferida);
+      let valorRestante = valorTotalProcesso;
+      let seguranca = 0;
 
-      resultado.push({
-        processo,
-        datasProducao,
-        datasAcabamento,
-        datasMontagem,
-        valorProducaoPorDia,
-        inicioProducao: datasProducao[0] || null,
-        fimProducao,
-        inicioAcabamento,
-        fimAcabamento,
-        inicioMontagem,
-        fimMontagem,
-        dataEntregaCalculada,
-        temDatasManuais:
-          temProducaoManual || temAcabamentoManual || temMontagemManual,
-      });
+      while (valorRestante > 0.009 && seguranca < 1460) {
+        const chave = formatarDataISO(cursor);
+
+        if (eDiaUtil(cursor)) {
+          const cargaAtual = cargaProducaoPorDia[chave] || 0;
+          const capacidadeDia =
+            resumo.objetivoDiario > 0
+              ? Math.max(resumo.objetivoDiario - cargaAtual, 0)
+              : valorRestante;
+
+          if (capacidadeDia > 0) {
+            const valorAReservar = Math.min(valorRestante, capacidadeDia);
+
+            if (!datasProducao.includes(chave)) datasProducao.push(chave);
+
+            valorProducaoPorDia[chave] =
+              (valorProducaoPorDia[chave] || 0) + valorAReservar;
+
+            cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
+            valorRestante -= valorAReservar;
+          }
+        }
+
+        cursor.setDate(cursor.getDate() + 1);
+        seguranca += 1;
+      }
+
+      if (datasProducao.length === 0) {
+        const diasFallback = obterDiasProducaoNecessarios(processo);
+        datasProducao = adicionarDiasUteis(dataInicioPreferida, diasFallback);
+
+        const valorFallback =
+          datasProducao.length > 0 ? valorTotalProcesso / datasProducao.length : 0;
+
+        for (const dataFallback of datasProducao) {
+          valorProducaoPorDia[dataFallback] = valorFallback;
+          cargaProducaoPorDia[dataFallback] =
+            (cargaProducaoPorDia[dataFallback] || 0) + valorFallback;
+        }
+      }
     }
 
-    return resultado;
+    const fimProducao = datasProducao[datasProducao.length - 1] || null;
+
+    const datasAcabamento = calcularAcabamentosSemMexerNaProducao(
+      processo,
+      fimProducao,
+    );
+
+    const inicioAcabamento = datasAcabamento[0] || null;
+    const fimAcabamento = datasAcabamento[datasAcabamento.length - 1] || null;
+
+    const datasMontagem = temMontagemManual ? datasMontagemManuais : [];
+    const inicioMontagem = datasMontagem[0] || null;
+    const fimMontagem = datasMontagem[datasMontagem.length - 1] || null;
+
+    const dataEntregaCalculada = fimMontagem || fimAcabamento || fimProducao;
+
+    const temAcabamentoManual =
+      !!processo.data_inicio_acabamento_manual ||
+      !!processo.data_fim_acabamento_manual ||
+      (!!processo.data_inicio_montagem_manual &&
+        obterDiasAcabamentoNecessarios(processo) > 0);
+
+    resultado.push({
+      processo,
+      datasProducao,
+      datasAcabamento,
+      datasMontagem,
+      valorProducaoPorDia,
+      inicioProducao: datasProducao[0] || null,
+      fimProducao,
+      inicioAcabamento,
+      fimAcabamento,
+      inicioMontagem,
+      fimMontagem,
+      dataEntregaCalculada,
+      temDatasManuais: temProducaoManual || temAcabamentoManual || temMontagemManual,
+    });
   }
+
+  return resultado;
+}
 
   const planeamentos = useMemo<PlaneamentoProcesso[]>(
     () => calcularPlaneamentos(processosFiltradosPorArquivo),
