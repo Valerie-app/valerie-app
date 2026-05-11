@@ -134,6 +134,10 @@ const DESBLOQUEIO_FIM_SEMANA = "__FIM_SEMANA_DESBLOQUEADO__";
 const ESTADOS_DISPONIVEIS = ["Todos", "Validado"] as const;
 const MES_META_GLOBAL = 0;
 
+const TAXA_CAPACIDADE_PRODUCAO = 0.8;
+const TAXA_CAPACIDADE_ACABAMENTOS = 0.7;
+const TAXA_CAPACIDADE_MONTAGENS = 0.65;
+
 const COLUNAS_PROCESSOS =
   "id, codigo_val, nome_cliente, nome_obra, estado, dias_fabrico_previstos, dias_acabamento_previstos, dias_montagem_previstos, dias_totais_previstos, data_inicio_prevista, data_entrega_prevista, valor_diario_referencia, valor_estimado, valor_estimado_com_desconto, valor_final, created_at, responsavel_obra_nome, responsavel_obra_email, responsavel_acabamentos_nome, responsavel_acabamentos_email, responsavel_montagem_nome, responsavel_montagem_email, admin_alerta_email, data_inicio_producao_manual, data_fim_producao_manual, data_inicio_acabamento_manual, data_fim_acabamento_manual, data_inicio_montagem_manual, data_fim_montagem_manual, calendario_arquivado";
 
@@ -633,8 +637,11 @@ export default function AdminCalendarioPage() {
     const diasUteisReaisAno = Math.max(diasUteisAno, 0);
     const diasUteisMes = contarDiasUteisMes(ano, mesIndex);
     const diasUteisReaisMes = Math.max(diasUteisMes, 0);
-    const objetivoDiario =
+    const objetivoDiarioBruto =
       diasUteisReaisAno > 0 ? objetivoAnual / diasUteisReaisAno : 0;
+
+    const objetivoDiario =
+      objetivoDiarioBruto * TAXA_CAPACIDADE_PRODUCAO;
     const valorPrevisto = processosValidados.reduce(
       (acc, processo) => acc + obterValorFinanceiroProcesso(processo),
       0,
@@ -672,7 +679,12 @@ export default function AdminCalendarioPage() {
   }
 
   function obterDiasAcabamentoNecessarios(processo: ProcessoCalendario) {
-    return Math.max(Number(processo.dias_acabamento_previstos || 0), 0);
+    const diasBase = Math.max(
+      Number(processo.dias_acabamento_previstos || 0),
+      0,
+    );
+
+    return Math.ceil(diasBase / TAXA_CAPACIDADE_ACABAMENTOS);
   }
 
   function calcularAcabamentosSemMexerNaProducao(
@@ -1392,7 +1404,10 @@ export default function AdminCalendarioPage() {
         return;
       }
       const diasFabrico = Number(processo.dias_fabrico_previstos || 0);
-      const diasMontagem = Number(processo.dias_montagem_previstos || 0);
+      const diasMontagem = Math.ceil(
+        Number(processo.dias_montagem_previstos || 0) /
+          TAXA_CAPACIDADE_MONTAGENS,
+      );
       const diasTotais =
         diasFabrico + diasAcabamento + diasMontagem > 0
           ? diasFabrico + diasAcabamento + diasMontagem
@@ -1899,6 +1914,12 @@ export default function AdminCalendarioPage() {
             Esta meta é guardada uma vez por ano e é usada em todos os meses. A
             produção automática começa sempre no dia de hoje ou depois, nunca em
             dias passados.
+
+            Produção trabalha a 80% da capacidade.
+            Acabamentos trabalham a 70%.
+            Montagens trabalham a 65%.
+
+            Isto cria margem real para atrasos, ajustes de obra, clientes e imprevistos.
           </div>
         </div>
 
