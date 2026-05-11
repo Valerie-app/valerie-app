@@ -11,6 +11,9 @@
   - Produção não é mexida quando ajustas acabamentos/montagens
   - Se houver montagem ou fim de acabamento e dias de acabamento, o acabamento é calculado para trás
   - Datas manuais, arquivo, responsáveis, emails e bloqueios
+  - Linha temporal também na aba de produção (com dias de acabamento editável)
+  - Ordenação por data de montagem: quem tem montagem mais cedo produz primeiro
+  - Quando não há montagem manual, estima fim_produção + dias_acabamento para ordenar
 */
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -722,23 +725,47 @@ export default function AdminCalendarioPage() {
   }
 
   function calcularPlaneamentos(listaProcessos: ProcessoCalendario[]) {
+    const hoje = hojeSemHoras();
+
+    // Função auxiliar: estima a data de montagem para ordenação
+    function estimarDataMontagem(p: ProcessoCalendario): number {
+      // 1. Montagem manual definida — usa diretamente
+      if (p.data_inicio_montagem_manual) {
+        return parseDateOnly(p.data_inicio_montagem_manual).getTime();
+      }
+
+      // 2. Sem montagem manual: estima fim_produção + dias_acabamento
+      const dataBase = p.data_inicio_prevista
+        ? parseDateOnly(p.data_inicio_prevista)
+        : hoje;
+      const dataBaseReal = maxData(dataBase, hoje);
+      const diasProd = obterDiasProducaoNecessarios(p);
+      const diasAcab = obterDiasAcabamentoNecessarios(p);
+      const totalDias = diasProd + diasAcab;
+
+      if (totalDias <= 0) {
+        // Sem dados suficientes: usa data de entrega prevista ou created_at
+        if (p.data_entrega_prevista)
+          return parseDateOnly(p.data_entrega_prevista).getTime();
+        if (p.created_at) return new Date(p.created_at).getTime();
+        return Infinity;
+      }
+
+      const datasEstimadas = adicionarDiasUteis(
+        proximoDiaUtil(dataBaseReal),
+        totalDias,
+      );
+      const fimEstimado = datasEstimadas[datasEstimadas.length - 1];
+      return fimEstimado ? parseDateOnly(fimEstimado).getTime() : Infinity;
+    }
+
+    // Ordena: quem tem montagem mais cedo (manual ou estimada) produz primeiro
     const processosOrdenados = [...listaProcessos].sort((a, b) => {
-      const dataInicioA = a.data_inicio_prevista
-        ? parseDateOnly(a.data_inicio_prevista).getTime()
-        : a.created_at
-          ? new Date(a.created_at).getTime()
-          : 0;
-      const dataInicioB = b.data_inicio_prevista
-        ? parseDateOnly(b.data_inicio_prevista).getTime()
-        : b.created_at
-          ? new Date(b.created_at).getTime()
-          : 0;
-      return dataInicioA - dataInicioB;
+      return estimarDataMontagem(a) - estimarDataMontagem(b);
     });
 
     const resultado: PlaneamentoProcesso[] = [];
     const cargaProducaoPorDia: Record<string, number> = {};
-    const hoje = hojeSemHoras();
 
     for (const processo of processosOrdenados) {
       const datasProducaoManuais = obterIntervaloDiasUteis(
@@ -1944,19 +1971,24 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
-            {(tipoCalendario === "acabamentos" ||
+            {/* Timeline — aparece em produção, acabamentos e montagens */}
+            {(tipoCalendario === "producao" ||
+              tipoCalendario === "acabamentos" ||
               tipoCalendario === "montagens") && (
               <div style={estilos.cardStyle}>
                 <div style={estilos.tituloComAcoesStyle}>
                   <div>
                     <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
-                      {tipoCalendario === "acabamentos"
-                        ? "Linha temporal de acabamentos"
-                        : "Linha temporal de montagens"}
+                      {tipoCalendario === "producao"
+                        ? "Linha temporal de produção"
+                        : tipoCalendario === "acabamentos"
+                          ? "Linha temporal de acabamentos"
+                          : "Linha temporal de montagens"}
                     </h2>
                     <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
-                      Os cartões começam minimizados. Abre apenas a obra que
-                      queres editar.
+                      {tipoCalendario === "producao"
+                        ? "Obras ordenadas por data de montagem (mais urgente primeiro). Os cartões começam minimizados."
+                        : "Os cartões começam minimizados. Abre apenas a obra que queres editar."}
                     </p>
                   </div>
                   <div style={estilos.acoesInlineStyle}>
@@ -2031,12 +2063,15 @@ export default function AdminCalendarioPage() {
                                 </div>
                               )}
                               <div style={estilos.timelineBadgeStyle}>
-                                {tipoCalendario === "acabamentos"
-                                  ? `${item.datasAcabamento.length} dias acab.`
-                                  : `${item.datasMontagem.length} dias montagem`}
+                                {tipoCalendario === "producao"
+                                  ? `${item.datasProducao.length} dias prod.`
+                                  : tipoCalendario === "acabamentos"
+                                    ? `${item.datasAcabamento.length} dias acab.`
+                                    : `${item.datasMontagem.length} dias montagem`}
                               </div>
                             </div>
                           </div>
+
                           <div style={estilos.timelineDatasStyle}>
                             <span>
                               Prod.: {formatarData(item.inicioProducao)} →{" "}
@@ -2053,7 +2088,28 @@ export default function AdminCalendarioPage() {
                             <span>
                               Entrega: {formatarData(item.dataEntregaCalculada)}
                             </span>
+                            {tipoCalendario === "producao" && (
+                              <span
+                                style={{
+                                  color: "#9df5b4",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                Valor:{" "}
+                                {formatarMoeda(
+                                  obterValorFinanceiroProcesso(item.processo),
+                                )}
+                              </span>
+                            )}
+                            {tipoCalendario === "producao" &&
+                              item.datasProducao.length > 0 && (
+                                <span style={{ opacity: 0.75 }}>
+                                  {item.datasProducao.length} dias prod. ·{" "}
+                                  {item.datasAcabamento.length} dias acab.
+                                </span>
+                              )}
                           </div>
+
                           <div style={estilos.timelineBarraWrapStyle}>
                             <div
                               style={{
@@ -2061,10 +2117,13 @@ export default function AdminCalendarioPage() {
                                 background:
                                   tipoCalendario === "montagens"
                                     ? "linear-gradient(90deg, rgba(156,39,176,0.35), rgba(186,104,200,0.95))"
-                                    : "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(66,133,244,0.95))",
+                                    : tipoCalendario === "producao"
+                                      ? "linear-gradient(90deg, rgba(52,168,83,0.35), rgba(52,168,83,0.95))"
+                                      : "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(66,133,244,0.95))",
                               }}
                             />
                           </div>
+
                           <div style={estilos.acoesInlineStyle}>
                             <button
                               type="button"
@@ -2098,335 +2157,7 @@ export default function AdminCalendarioPage() {
 
                           {estaAberto && (
                             <div style={estilos.gestaoGridStyle}>
-                              <div style={estilos.editarAcabamentoBoxStyle}>
-                                <strong>Responsáveis e emails</strong>
-                                <div style={estilos.formGridStyle}>
-                                  <input
-                                    value={
-                                      contactosEdit[item.processo.id]
-                                        ?.responsavel_obra_nome || ""
-                                    }
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_obra_nome: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Nome responsável obra"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <input
-                                    value={
-                                      contactosEdit[item.processo.id]
-                                        ?.responsavel_obra_email || ""
-                                    }
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_obra_email:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email responsável obra"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <input
-                                    value={
-                                      contactosEdit[item.processo.id]
-                                        ?.responsavel_acabamentos_nome || ""
-                                    }
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_acabamentos_nome:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Nome responsável acabamentos"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <input
-                                    value={
-                                      contactosEdit[item.processo.id]
-                                        ?.responsavel_acabamentos_email || ""
-                                    }
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_acabamentos_email:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email responsável acabamentos"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <input
-                                    value={
-                                      contactosEdit[item.processo.id]
-                                        ?.responsavel_montagem_nome || ""
-                                    }
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_montagem_nome:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Nome responsável montagem"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <input
-                                    value={
-                                      contactosEdit[item.processo.id]
-                                        ?.responsavel_montagem_email || ""
-                                    }
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          responsavel_montagem_email:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email responsável montagem"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <input
-                                    value={
-                                      contactosEdit[item.processo.id]
-                                        ?.admin_alerta_email || ""
-                                    }
-                                    onChange={(e) =>
-                                      setContactosEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          admin_alerta_email: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Email admin em cópia"
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                </div>
-                                <div style={estilos.acoesInlineStyle}>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      guardarContactos(item.processo)
-                                    }
-                                    disabled={
-                                      processoAGuardarContactos ===
-                                      item.processo.id
-                                    }
-                                    style={estilos.botaoPrincipalStyle}
-                                  >
-                                    {processoAGuardarContactos ===
-                                    item.processo.id
-                                      ? "A guardar..."
-                                      : "Guardar emails"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      enviarAlertasEmail(item.processo)
-                                    }
-                                    disabled={
-                                      processoAEnviarEmail === item.processo.id
-                                    }
-                                    style={estilos.botaoSecundarioStyle}
-                                  >
-                                    {processoAEnviarEmail === item.processo.id
-                                      ? "A enviar..."
-                                      : "Enviar alerta"}
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div style={estilos.editarAcabamentoBoxStyle}>
-                                <strong>Datas manuais do calendário</strong>
-                                <div style={estilos.formGridStyle}>
-                                  <label style={estilos.smallLabelStyle}>
-                                    Início produção
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={
-                                      datasManuaisEdit[item.processo.id]
-                                        ?.data_inicio_producao_manual || ""
-                                    }
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_inicio_producao_manual:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <label style={estilos.smallLabelStyle}>
-                                    Fim produção
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={
-                                      datasManuaisEdit[item.processo.id]
-                                        ?.data_fim_producao_manual || ""
-                                    }
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_fim_producao_manual:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <label style={estilos.smallLabelStyle}>
-                                    Início acabamentos
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={
-                                      datasManuaisEdit[item.processo.id]
-                                        ?.data_inicio_acabamento_manual || ""
-                                    }
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_inicio_acabamento_manual:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <label style={estilos.smallLabelStyle}>
-                                    Fim acabamentos
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={
-                                      datasManuaisEdit[item.processo.id]
-                                        ?.data_fim_acabamento_manual || ""
-                                    }
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_fim_acabamento_manual:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <label style={estilos.smallLabelStyle}>
-                                    Início montagem
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={
-                                      datasManuaisEdit[item.processo.id]
-                                        ?.data_inicio_montagem_manual || ""
-                                    }
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_inicio_montagem_manual:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                  <label style={estilos.smallLabelStyle}>
-                                    Fim montagem
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={
-                                      datasManuaisEdit[item.processo.id]
-                                        ?.data_fim_montagem_manual || ""
-                                    }
-                                    onChange={(e) =>
-                                      setDatasManuaisEdit((prev) => ({
-                                        ...prev,
-                                        [item.processo.id]: {
-                                          ...prev[item.processo.id],
-                                          data_fim_montagem_manual:
-                                            e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    style={estilos.inputFiltroStyle}
-                                  />
-                                </div>
-                                <div style={estilos.acoesInlineStyle}>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      guardarDatasManuais(item.processo)
-                                    }
-                                    disabled={
-                                      processoAGuardarDatas === item.processo.id
-                                    }
-                                    style={estilos.botaoPrincipalStyle}
-                                  >
-                                    {processoAGuardarDatas === item.processo.id
-                                      ? "A guardar..."
-                                      : "Guardar datas"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      limparDatasManuais(item.processo)
-                                    }
-                                    disabled={
-                                      processoAGuardarDatas === item.processo.id
-                                    }
-                                    style={estilos.botaoRemoverStyle}
-                                  >
-                                    Limpar datas
-                                  </button>
-                                </div>
-                                <div style={estilos.metaAjudaStyle}>
-                                  Se colocares só fim de acabamento e dias de
-                                  acabamento, o início é calculado para trás. Se
-                                  colocares montagem e dias de acabamento, os
-                                  acabamentos ficam antes da montagem. A
-                                  produção não muda.
-                                </div>
-                              </div>
-
+                              {/* Dias de acabamento — visível em todas as abas */}
                               <div style={estilos.editarAcabamentoBoxStyle}>
                                 <strong>Ajustar dias de acabamento</strong>
                                 <div style={estilos.editarAcabamentoGridStyle}>
@@ -2464,11 +2195,354 @@ export default function AdminCalendarioPage() {
                                   </button>
                                 </div>
                                 <div style={estilos.metaAjudaStyle}>
-                                  Se já existir fim de acabamento ou montagem,
-                                  os dias são ajustados para trás sem mexer na
-                                  produção.
+                                  {tipoCalendario === "producao"
+                                    ? "Alterando os dias de acabamento, a data de montagem estimada recalcula automaticamente e reordena a fila de produção."
+                                    : "Se já existir fim de acabamento ou montagem, os dias são ajustados para trás sem mexer na produção."}
                                 </div>
                               </div>
+
+                              {/* Responsáveis e datas manuais — só em acabamentos e montagens */}
+                              {tipoCalendario !== "producao" && (
+                                <>
+                                  <div style={estilos.editarAcabamentoBoxStyle}>
+                                    <strong>Responsáveis e emails</strong>
+                                    <div style={estilos.formGridStyle}>
+                                      <input
+                                        value={
+                                          contactosEdit[item.processo.id]
+                                            ?.responsavel_obra_nome || ""
+                                        }
+                                        onChange={(e) =>
+                                          setContactosEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              responsavel_obra_nome:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Nome responsável obra"
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <input
+                                        value={
+                                          contactosEdit[item.processo.id]
+                                            ?.responsavel_obra_email || ""
+                                        }
+                                        onChange={(e) =>
+                                          setContactosEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              responsavel_obra_email:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Email responsável obra"
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <input
+                                        value={
+                                          contactosEdit[item.processo.id]
+                                            ?.responsavel_acabamentos_nome || ""
+                                        }
+                                        onChange={(e) =>
+                                          setContactosEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              responsavel_acabamentos_nome:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Nome responsável acabamentos"
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <input
+                                        value={
+                                          contactosEdit[item.processo.id]
+                                            ?.responsavel_acabamentos_email ||
+                                          ""
+                                        }
+                                        onChange={(e) =>
+                                          setContactosEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              responsavel_acabamentos_email:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Email responsável acabamentos"
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <input
+                                        value={
+                                          contactosEdit[item.processo.id]
+                                            ?.responsavel_montagem_nome || ""
+                                        }
+                                        onChange={(e) =>
+                                          setContactosEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              responsavel_montagem_nome:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Nome responsável montagem"
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <input
+                                        value={
+                                          contactosEdit[item.processo.id]
+                                            ?.responsavel_montagem_email || ""
+                                        }
+                                        onChange={(e) =>
+                                          setContactosEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              responsavel_montagem_email:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Email responsável montagem"
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <input
+                                        value={
+                                          contactosEdit[item.processo.id]
+                                            ?.admin_alerta_email || ""
+                                        }
+                                        onChange={(e) =>
+                                          setContactosEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              admin_alerta_email:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder="Email admin em cópia"
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                    </div>
+                                    <div style={estilos.acoesInlineStyle}>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          guardarContactos(item.processo)
+                                        }
+                                        disabled={
+                                          processoAGuardarContactos ===
+                                          item.processo.id
+                                        }
+                                        style={estilos.botaoPrincipalStyle}
+                                      >
+                                        {processoAGuardarContactos ===
+                                        item.processo.id
+                                          ? "A guardar..."
+                                          : "Guardar emails"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          enviarAlertasEmail(item.processo)
+                                        }
+                                        disabled={
+                                          processoAEnviarEmail ===
+                                          item.processo.id
+                                        }
+                                        style={estilos.botaoSecundarioStyle}
+                                      >
+                                        {processoAEnviarEmail ===
+                                        item.processo.id
+                                          ? "A enviar..."
+                                          : "Enviar alerta"}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div style={estilos.editarAcabamentoBoxStyle}>
+                                    <strong>Datas manuais do calendário</strong>
+                                    <div style={estilos.formGridStyle}>
+                                      <label style={estilos.smallLabelStyle}>
+                                        Início produção
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={
+                                          datasManuaisEdit[item.processo.id]
+                                            ?.data_inicio_producao_manual || ""
+                                        }
+                                        onChange={(e) =>
+                                          setDatasManuaisEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              data_inicio_producao_manual:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <label style={estilos.smallLabelStyle}>
+                                        Fim produção
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={
+                                          datasManuaisEdit[item.processo.id]
+                                            ?.data_fim_producao_manual || ""
+                                        }
+                                        onChange={(e) =>
+                                          setDatasManuaisEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              data_fim_producao_manual:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <label style={estilos.smallLabelStyle}>
+                                        Início acabamentos
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={
+                                          datasManuaisEdit[item.processo.id]
+                                            ?.data_inicio_acabamento_manual ||
+                                          ""
+                                        }
+                                        onChange={(e) =>
+                                          setDatasManuaisEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              data_inicio_acabamento_manual:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <label style={estilos.smallLabelStyle}>
+                                        Fim acabamentos
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={
+                                          datasManuaisEdit[item.processo.id]
+                                            ?.data_fim_acabamento_manual || ""
+                                        }
+                                        onChange={(e) =>
+                                          setDatasManuaisEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              data_fim_acabamento_manual:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <label style={estilos.smallLabelStyle}>
+                                        Início montagem
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={
+                                          datasManuaisEdit[item.processo.id]
+                                            ?.data_inicio_montagem_manual || ""
+                                        }
+                                        onChange={(e) =>
+                                          setDatasManuaisEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              data_inicio_montagem_manual:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                      <label style={estilos.smallLabelStyle}>
+                                        Fim montagem
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={
+                                          datasManuaisEdit[item.processo.id]
+                                            ?.data_fim_montagem_manual || ""
+                                        }
+                                        onChange={(e) =>
+                                          setDatasManuaisEdit((prev) => ({
+                                            ...prev,
+                                            [item.processo.id]: {
+                                              ...prev[item.processo.id],
+                                              data_fim_montagem_manual:
+                                                e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        style={estilos.inputFiltroStyle}
+                                      />
+                                    </div>
+                                    <div style={estilos.acoesInlineStyle}>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          guardarDatasManuais(item.processo)
+                                        }
+                                        disabled={
+                                          processoAGuardarDatas ===
+                                          item.processo.id
+                                        }
+                                        style={estilos.botaoPrincipalStyle}
+                                      >
+                                        {processoAGuardarDatas ===
+                                        item.processo.id
+                                          ? "A guardar..."
+                                          : "Guardar datas"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          limparDatasManuais(item.processo)
+                                        }
+                                        disabled={
+                                          processoAGuardarDatas ===
+                                          item.processo.id
+                                        }
+                                        style={estilos.botaoRemoverStyle}
+                                      >
+                                        Limpar datas
+                                      </button>
+                                    </div>
+                                    <div style={estilos.metaAjudaStyle}>
+                                      Se colocares só fim de acabamento e dias
+                                      de acabamento, o início é calculado para
+                                      trás. Se colocares montagem e dias de
+                                      acabamento, os acabamentos ficam antes da
+                                      montagem. A produção não muda.
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
