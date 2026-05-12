@@ -722,60 +722,18 @@ export default function AdminCalendarioPage() {
   }
 
   function calcularPlaneamentos(listaProcessos: ProcessoCalendario[]) {
-    function obterDataPrioridadePlaneamento(processo: ProcessoCalendario) {
-      if (processo.data_entrega_prevista)
-        return parseDateOnly(processo.data_entrega_prevista).getTime();
-
-      if (processo.data_inicio_montagem_manual)
-        return parseDateOnly(processo.data_inicio_montagem_manual).getTime();
-
-      if (processo.data_fim_acabamento_manual)
-        return parseDateOnly(processo.data_fim_acabamento_manual).getTime();
-
-      if (processo.data_inicio_acabamento_manual)
-        return parseDateOnly(processo.data_inicio_acabamento_manual).getTime();
-
-      if (processo.data_inicio_prevista)
-        return parseDateOnly(processo.data_inicio_prevista).getTime();
-
-      if (processo.created_at) return new Date(processo.created_at).getTime();
-
-      return Infinity;
-    }
-
     const processosOrdenados = [...listaProcessos].sort((a, b) => {
-      const prioridadeA = obterDataPrioridadePlaneamento(a);
-      const prioridadeB = obterDataPrioridadePlaneamento(b);
-
-      if (prioridadeA !== prioridadeB) return prioridadeA - prioridadeB;
-
-      const entregaA = a.data_entrega_prevista
-        ? parseDateOnly(a.data_entrega_prevista).getTime()
-        : Infinity;
-      const entregaB = b.data_entrega_prevista
-        ? parseDateOnly(b.data_entrega_prevista).getTime()
-        : Infinity;
-
-      if (entregaA !== entregaB) return entregaA - entregaB;
-
-      const montagemA = a.data_inicio_montagem_manual
-        ? parseDateOnly(a.data_inicio_montagem_manual).getTime()
-        : Infinity;
-      const montagemB = b.data_inicio_montagem_manual
-        ? parseDateOnly(b.data_inicio_montagem_manual).getTime()
-        : Infinity;
-
-      if (montagemA !== montagemB) return montagemA - montagemB;
-
-      const valorA = obterValorFinanceiroProcesso(a);
-      const valorB = obterValorFinanceiroProcesso(b);
-
-      if (valorA !== valorB) return valorB - valorA;
-
-      const criadoA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const criadoB = b.created_at ? new Date(b.created_at).getTime() : 0;
-
-      return criadoA - criadoB;
+      const dataInicioA = a.data_inicio_prevista
+        ? parseDateOnly(a.data_inicio_prevista).getTime()
+        : a.created_at
+          ? new Date(a.created_at).getTime()
+          : 0;
+      const dataInicioB = b.data_inicio_prevista
+        ? parseDateOnly(b.data_inicio_prevista).getTime()
+        : b.created_at
+          ? new Date(b.created_at).getTime()
+          : 0;
+      return dataInicioA - dataInicioB;
     });
 
     const resultado: PlaneamentoProcesso[] = [];
@@ -967,30 +925,6 @@ export default function AdminCalendarioPage() {
           data: planeamento.dataEntregaCalculada,
         },
       ];
-
-      if (
-        planeamento.processo.data_entrega_prevista &&
-        planeamento.dataEntregaCalculada &&
-        planeamento.dataEntregaCalculada > planeamento.processo.data_entrega_prevista
-      ) {
-        const diasAteEntregaPedida = diferencaDias(
-          planeamento.processo.data_entrega_prevista,
-        );
-        lista.push({
-          id: `${planeamento.processo.id}-entrega-em-risco-${planeamento.processo.data_entrega_prevista}`,
-          titulo: "Entrega em risco",
-          texto: `${nome} está pedido para ${formatarData(
-            planeamento.processo.data_entrega_prevista,
-          )}, mas a produção está cheia. Primeira data disponível: ${formatarData(
-            planeamento.dataEntregaCalculada,
-          )}.`,
-          data: planeamento.processo.data_entrega_prevista,
-          diasAte: diasAteEntregaPedida,
-          nivel: "urgente",
-          processo: planeamento.processo,
-        });
-      }
-
       for (const evento of eventos) {
         if (!evento.data) continue;
         const diasAte = diferencaDias(evento.data);
@@ -1984,7 +1918,7 @@ export default function AdminCalendarioPage() {
 
             {alertas.length > 0 && (
               <div style={estilos.cardStyle}>
-                <h2 style={{ marginTop: 0 }}>Alertas de planeamento</h2>
+                <h2 style={{ marginTop: 0 }}>Alertas dos próximos 10 dias</h2>
                 <div style={estilos.alertasGridStyle}>
                   {alertas.slice(0, 8).map((alerta) => (
                     <div
@@ -2009,181 +1943,6 @@ export default function AdminCalendarioPage() {
                 </div>
               </div>
             )}
-
-            <div style={estilos.calendarCardStyle}>
-              <div style={estilos.diasSemanaHeaderStyle}>
-                {nomesDias.map((dia, index) => (
-                  <div
-                    key={`${dia}-${index}`}
-                    style={estilos.diaSemanaHeaderItemStyle}
-                  >
-                    {dia}
-                  </div>
-                ))}
-              </div>
-
-              <div style={estilos.grelhaMesStyle}>
-                {diasDoMes.map((dia) => {
-                  const processosDoDia = obterProcessosDoDia(dia.data);
-                  const bloqueio = obterBloqueioDoDia(dia.data);
-                  const desbloqueadoFimSemana = eDesbloqueioFimSemana(bloqueio);
-                  const hoje = formatarDataISO(new Date()) === dia.chave;
-                  const valorDia = obterValorPrevistoDoDia(dia.data);
-                  const diasFinanceirosDia = obterDiasFinanceirosDoDia(
-                    dia.data,
-                  );
-                  const estiloFinanceiro = obterEstiloFinanceiroDia(
-                    valorDia,
-                    resumo.objetivoDiario,
-                  );
-                  const limiteEventos =
-                    tipoCalendario === "producao" ? (eDesktop ? 3 : 2) : 1;
-                  const fimSemana = eFimDeSemana(dia.data);
-                  const bloqueadoVisual =
-                    eBloqueioManual(dia.data) ||
-                    (fimSemana && !desbloqueadoFimSemana);
-
-                  return (
-                    <button
-                      key={dia.chave}
-                      type="button"
-                      onClick={() => abrirModalBloqueio(dia.data)}
-                      style={{
-                        ...estilos.diaMesCardStyle,
-                        opacity: dia.pertenceAoMesAtual ? 1 : 0.42,
-                        border: hoje
-                          ? "1px solid rgba(66,133,244,0.95)"
-                          : "1px solid rgba(255,255,255,0.06)",
-                        background: bloqueadoVisual
-                          ? "rgba(160,82,45,0.13)"
-                          : fimSemana && desbloqueadoFimSemana
-                            ? "rgba(52,168,83,0.08)"
-                            : "rgba(255,255,255,0.01)",
-                        boxShadow: hoje
-                          ? "inset 0 0 0 1px rgba(66,133,244,0.4)"
-                          : "none",
-                      }}
-                    >
-                      <div style={estilos.topoDiaStyle}>
-                        <div
-                          style={{
-                            ...estilos.numeroDiaStyle,
-                            background: hoje
-                              ? "rgba(66,133,244,0.95)"
-                              : "transparent",
-                            color: hoje ? "white" : "inherit",
-                          }}
-                        >
-                          {dia.dia}
-                        </div>
-                        <div
-                          style={{
-                            ...estilos.financeBadgeStyle,
-                            background: estiloFinanceiro.fundo,
-                            border: `1px solid ${estiloFinanceiro.borda}`,
-                            color: estiloFinanceiro.texto,
-                          }}
-                        >
-                          {tipoCalendario === "producao"
-                            ? `${valorDia.toFixed(0)} €`
-                            : tipoCalendario === "acabamentos"
-                              ? `${processosDoDia.length} acab.`
-                              : `${processosDoDia.length} mont.`}
-                        </div>
-                      </div>
-
-                      <div style={estilos.eventosDiaStyle}>
-                        {bloqueadoVisual && (
-                          <div
-                            style={{
-                              ...estilos.eventoStyle,
-                              background: "rgba(160,82,45,0.90)",
-                              border: "1px solid rgba(160,82,45,1)",
-                            }}
-                          >
-                            {fimSemana && !eBloqueioManual(dia.data)
-                              ? "Fim semana"
-                              : "Bloqueado"}
-                          </div>
-                        )}
-                        {fimSemana && desbloqueadoFimSemana && (
-                          <div
-                            style={{
-                              ...estilos.eventoStyle,
-                              background: "rgba(52,168,83,0.70)",
-                              border: "1px solid rgba(52,168,83,1)",
-                            }}
-                          >
-                            Desbloqueado
-                          </div>
-                        )}
-                        {processosDoDia.length === 0 &&
-                        !bloqueadoVisual &&
-                        !desbloqueadoFimSemana ? (
-                          <div style={estilos.diaVazioStyle}>—</div>
-                        ) : (
-                          processosDoDia
-                            .slice(0, limiteEventos)
-                            .map((processo) => {
-                              const planeamento = obterPlaneamentoProcesso(
-                                processo.id,
-                              );
-                              const cores = obterCoresEstado(processo.estado);
-                              const valorProcessoDia =
-                                obterValorProducaoDoProcessoNoDia(
-                                  processo.id,
-                                  dia.data,
-                                );
-                              return (
-                                <div
-                                  key={`${dia.chave}-${processo.id}`}
-                                  title={`${processo.codigo_val || "Sem VAL"} | ${processo.nome_obra || "Obra"} | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`}
-                                  style={{
-                                    ...estilos.eventoStyle,
-                                    background: cores.fundo,
-                                    border: `1px solid ${cores.borda}`,
-                                  }}
-                                >
-                                  {planeamento?.temDatasManuais ? "✎ " : ""}
-                                  {processo.calendario_arquivado ? "🗄 " : ""}
-                                  {processo.codigo_val || "Sem VAL"} ·{" "}
-                                  {processo.nome_obra ||
-                                    processo.nome_cliente ||
-                                    "Sem nome"}
-                                </div>
-                              );
-                            })
-                        )}
-                        {processosDoDia.length > limiteEventos && (
-                          <div style={estilos.maisEventosStyle}>
-                            +{processosDoDia.length - limiteEventos} mais
-                          </div>
-                        )}
-                      </div>
-
-                      <div
-                        style={{
-                          ...estilos.rodapeFinanceiroDiaStyle,
-                          background: estiloFinanceiro.fundo,
-                          border: `1px solid ${estiloFinanceiro.borda}`,
-                        }}
-                      >
-                        <div style={{ color: estiloFinanceiro.texto }}>
-                          {tipoCalendario === "producao"
-                            ? `${diasFinanceirosDia.toFixed(2)} dias`
-                            : `${processosDoDia.length} obras`}
-                        </div>
-                        <div style={{ opacity: 0.8 }}>
-                          {tipoCalendario === "producao"
-                            ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €`
-                            : "Ver timeline"}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
 
             {(tipoCalendario === "acabamentos" ||
               tipoCalendario === "montagens") && (
@@ -2720,6 +2479,180 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
+            <div style={estilos.calendarCardStyle}>
+              <div style={estilos.diasSemanaHeaderStyle}>
+                {nomesDias.map((dia, index) => (
+                  <div
+                    key={`${dia}-${index}`}
+                    style={estilos.diaSemanaHeaderItemStyle}
+                  >
+                    {dia}
+                  </div>
+                ))}
+              </div>
+
+              <div style={estilos.grelhaMesStyle}>
+                {diasDoMes.map((dia) => {
+                  const processosDoDia = obterProcessosDoDia(dia.data);
+                  const bloqueio = obterBloqueioDoDia(dia.data);
+                  const desbloqueadoFimSemana = eDesbloqueioFimSemana(bloqueio);
+                  const hoje = formatarDataISO(new Date()) === dia.chave;
+                  const valorDia = obterValorPrevistoDoDia(dia.data);
+                  const diasFinanceirosDia = obterDiasFinanceirosDoDia(
+                    dia.data,
+                  );
+                  const estiloFinanceiro = obterEstiloFinanceiroDia(
+                    valorDia,
+                    resumo.objetivoDiario,
+                  );
+                  const limiteEventos =
+                    tipoCalendario === "producao" ? (eDesktop ? 3 : 2) : 1;
+                  const fimSemana = eFimDeSemana(dia.data);
+                  const bloqueadoVisual =
+                    eBloqueioManual(dia.data) ||
+                    (fimSemana && !desbloqueadoFimSemana);
+
+                  return (
+                    <button
+                      key={dia.chave}
+                      type="button"
+                      onClick={() => abrirModalBloqueio(dia.data)}
+                      style={{
+                        ...estilos.diaMesCardStyle,
+                        opacity: dia.pertenceAoMesAtual ? 1 : 0.42,
+                        border: hoje
+                          ? "1px solid rgba(66,133,244,0.95)"
+                          : "1px solid rgba(255,255,255,0.06)",
+                        background: bloqueadoVisual
+                          ? "rgba(160,82,45,0.13)"
+                          : fimSemana && desbloqueadoFimSemana
+                            ? "rgba(52,168,83,0.08)"
+                            : "rgba(255,255,255,0.01)",
+                        boxShadow: hoje
+                          ? "inset 0 0 0 1px rgba(66,133,244,0.4)"
+                          : "none",
+                      }}
+                    >
+                      <div style={estilos.topoDiaStyle}>
+                        <div
+                          style={{
+                            ...estilos.numeroDiaStyle,
+                            background: hoje
+                              ? "rgba(66,133,244,0.95)"
+                              : "transparent",
+                            color: hoje ? "white" : "inherit",
+                          }}
+                        >
+                          {dia.dia}
+                        </div>
+                        <div
+                          style={{
+                            ...estilos.financeBadgeStyle,
+                            background: estiloFinanceiro.fundo,
+                            border: `1px solid ${estiloFinanceiro.borda}`,
+                            color: estiloFinanceiro.texto,
+                          }}
+                        >
+                          {tipoCalendario === "producao"
+                            ? `${valorDia.toFixed(0)} €`
+                            : tipoCalendario === "acabamentos"
+                              ? `${processosDoDia.length} acab.`
+                              : `${processosDoDia.length} mont.`}
+                        </div>
+                      </div>
+
+                      <div style={estilos.eventosDiaStyle}>
+                        {bloqueadoVisual && (
+                          <div
+                            style={{
+                              ...estilos.eventoStyle,
+                              background: "rgba(160,82,45,0.90)",
+                              border: "1px solid rgba(160,82,45,1)",
+                            }}
+                          >
+                            {fimSemana && !eBloqueioManual(dia.data)
+                              ? "Fim semana"
+                              : "Bloqueado"}
+                          </div>
+                        )}
+                        {fimSemana && desbloqueadoFimSemana && (
+                          <div
+                            style={{
+                              ...estilos.eventoStyle,
+                              background: "rgba(52,168,83,0.70)",
+                              border: "1px solid rgba(52,168,83,1)",
+                            }}
+                          >
+                            Desbloqueado
+                          </div>
+                        )}
+                        {processosDoDia.length === 0 &&
+                        !bloqueadoVisual &&
+                        !desbloqueadoFimSemana ? (
+                          <div style={estilos.diaVazioStyle}>—</div>
+                        ) : (
+                          processosDoDia
+                            .slice(0, limiteEventos)
+                            .map((processo) => {
+                              const planeamento = obterPlaneamentoProcesso(
+                                processo.id,
+                              );
+                              const cores = obterCoresEstado(processo.estado);
+                              const valorProcessoDia =
+                                obterValorProducaoDoProcessoNoDia(
+                                  processo.id,
+                                  dia.data,
+                                );
+                              return (
+                                <div
+                                  key={`${dia.chave}-${processo.id}`}
+                                  title={`${processo.codigo_val || "Sem VAL"} | ${processo.nome_obra || "Obra"} | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`}
+                                  style={{
+                                    ...estilos.eventoStyle,
+                                    background: cores.fundo,
+                                    border: `1px solid ${cores.borda}`,
+                                  }}
+                                >
+                                  {planeamento?.temDatasManuais ? "✎ " : ""}
+                                  {processo.calendario_arquivado ? "🗄 " : ""}
+                                  {processo.codigo_val || "Sem VAL"} ·{" "}
+                                  {processo.nome_obra ||
+                                    processo.nome_cliente ||
+                                    "Sem nome"}
+                                </div>
+                              );
+                            })
+                        )}
+                        {processosDoDia.length > limiteEventos && (
+                          <div style={estilos.maisEventosStyle}>
+                            +{processosDoDia.length - limiteEventos} mais
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          ...estilos.rodapeFinanceiroDiaStyle,
+                          background: estiloFinanceiro.fundo,
+                          border: `1px solid ${estiloFinanceiro.borda}`,
+                        }}
+                      >
+                        <div style={{ color: estiloFinanceiro.texto }}>
+                          {tipoCalendario === "producao"
+                            ? `${diasFinanceirosDia.toFixed(2)} dias`
+                            : `${processosDoDia.length} obras`}
+                        </div>
+                        <div style={{ opacity: 0.8 }}>
+                          {tipoCalendario === "producao"
+                            ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €`
+                            : "Ver timeline"}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </>
         )}
 
