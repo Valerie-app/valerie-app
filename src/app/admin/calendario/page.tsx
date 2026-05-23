@@ -11,6 +11,9 @@
   - Produção não é mexida quando ajustas acabamentos/montagens
   - Se houver montagem ou fim de acabamento e dias de acabamento, o acabamento é calculado para trás
   - Datas manuais, arquivo, responsáveis, emails e bloqueios
+  - Ordenação por montagem/entrega
+  - Obras sem valor vão para o fim e não ocupam produção automática
+  - Aviso visual para obras sem valor definido
 */
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -545,6 +548,21 @@ export default function AdminCalendarioPage() {
     );
   }
 
+  function processoTemValorDefinido(processo: ProcessoCalendario) {
+    return obterValorFinanceiroProcesso(processo) > 0;
+  }
+
+  function obterDataPrioridadeProcesso(processo: ProcessoCalendario) {
+    return (
+      processo.data_inicio_montagem_manual ||
+      processo.data_entrega_prevista ||
+      processo.data_fim_montagem_manual ||
+      processo.data_fim_acabamento_manual ||
+      processo.data_inicio_prevista ||
+      null
+    );
+  }
+
   const processosValidados = useMemo(
     () => processos.filter((processo) => processo.estado === "Validado"),
     [processos],
@@ -723,17 +741,31 @@ export default function AdminCalendarioPage() {
 
   function calcularPlaneamentos(listaProcessos: ProcessoCalendario[]) {
     const processosOrdenados = [...listaProcessos].sort((a, b) => {
-      const dataInicioA = a.data_inicio_prevista
-        ? parseDateOnly(a.data_inicio_prevista).getTime()
+      const aTemValor = processoTemValorDefinido(a);
+      const bTemValor = processoTemValorDefinido(b);
+
+      // Obras sem valor não entram primeiro no planeamento automático.
+      // Ficam no fim até ser atribuído valor final/estimado.
+      if (aTemValor !== bTemValor) return aTemValor ? -1 : 1;
+
+      const prioridadeA = obterDataPrioridadeProcesso(a);
+      const prioridadeB = obterDataPrioridadeProcesso(b);
+
+      const tempoA = prioridadeA
+        ? parseDateOnly(prioridadeA).getTime()
         : a.created_at
           ? new Date(a.created_at).getTime()
-          : 0;
-      const dataInicioB = b.data_inicio_prevista
-        ? parseDateOnly(b.data_inicio_prevista).getTime()
+          : Infinity;
+
+      const tempoB = prioridadeB
+        ? parseDateOnly(prioridadeB).getTime()
         : b.created_at
           ? new Date(b.created_at).getTime()
-          : 0;
-      return dataInicioA - dataInicioB;
+          : Infinity;
+
+      if (tempoA !== tempoB) return tempoA - tempoB;
+
+      return obterValorFinanceiroProcesso(b) - obterValorFinanceiroProcesso(a);
     });
 
     const resultado: PlaneamentoProcesso[] = [];
@@ -755,7 +787,11 @@ export default function AdminCalendarioPage() {
       const valorProducaoPorDia: Record<string, number> = {};
       const valorTotalProcesso = obterValorFinanceiroProcesso(processo);
 
-      if (temProducaoManual) {
+      if (!processoTemValorDefinido(processo)) {
+        // Sem valor definido, a obra aparece na lista com aviso,
+        // mas não reserva dias nem valor na produção automática.
+        datasProducao = [];
+      } else if (temProducaoManual) {
         datasProducao = datasProducaoManuais;
         if (datasProducao.length > 0) {
           const valorPorDiaManual = valorTotalProcesso / datasProducao.length;
@@ -888,6 +924,22 @@ export default function AdminCalendarioPage() {
       const obra = planeamento.processo.nome_obra || "Sem nome";
       const val = planeamento.processo.codigo_val || "Sem VAL";
       const nome = `${val} · ${obra}`;
+
+      if (!processoTemValorDefinido(planeamento.processo)) {
+        lista.push({
+          id: `${planeamento.processo.id}-sem-valor`,
+          titulo: "Sem valor definido",
+          texto: `${nome} não entra no planeamento automático até ter valor final ou estimado.`,
+          data:
+            planeamento.processo.data_entrega_prevista ||
+            formatarDataISO(hojeSemHoras()),
+          diasAte: 0,
+          nivel: "urgente",
+          processo: planeamento.processo,
+        });
+        continue;
+      }
+
       const eventos = [
         {
           titulo: "Começar produção",
@@ -2025,6 +2077,11 @@ export default function AdminCalendarioPage() {
                                   Datas manuais
                                 </div>
                               )}
+                              {!processoTemValorDefinido(item.processo) && (
+                                <div style={estilos.semValorBadgeStyle}>
+                                  Sem valor
+                                </div>
+                              )}
                               {estaArquivado && (
                                 <div style={estilos.arquivadoBadgeStyle}>
                                   Arquivada
@@ -2054,6 +2111,12 @@ export default function AdminCalendarioPage() {
                               Entrega: {formatarData(item.dataEntregaCalculada)}
                             </span>
                           </div>
+                          {!processoTemValorDefinido(item.processo) && (
+                            <div style={estilos.avisoSemValorStyle}>
+                              Esta obra ainda não tem valor definido. Vai para o fim da fila e não ocupa produção automática.
+                            </div>
+                          )}
+
                           <div style={estilos.timelineBarraWrapStyle}>
                             <div
                               style={{
@@ -2614,6 +2677,7 @@ export default function AdminCalendarioPage() {
                                   }}
                                 >
                                   {planeamento?.temDatasManuais ? "✎ " : ""}
+                                  {!processoTemValorDefinido(processo) ? "⚠ " : ""}
                                   {processo.calendario_arquivado ? "🗄 " : ""}
                                   {processo.codigo_val || "Sem VAL"} ·{" "}
                                   {processo.nome_obra ||
@@ -2793,6 +2857,11 @@ export default function AdminCalendarioPage() {
                               planeamento?.dataEntregaCalculada || null,
                             )}
                           </div>
+                          {!processoTemValorDefinido(processo) && (
+                            <div style={estilos.semValorBadgeStyle}>
+                              Sem valor definido — não ocupa produção automática
+                            </div>
+                          )}
                           {planeamento?.temDatasManuais && (
                             <div style={estilos.manualBadgeStyle}>
                               Esta obra tem datas manuais
@@ -3314,6 +3383,29 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       fontSize: "12px",
       height: "fit-content",
       marginTop: "8px",
+    } satisfies CSSProperties,
+    semValorBadgeStyle: {
+      display: "inline-block",
+      padding: "6px 9px",
+      borderRadius: "999px",
+      background: "rgba(234,67,53,0.18)",
+      border: "1px solid rgba(234,67,53,0.45)",
+      color: "#ffb0b0",
+      fontWeight: "bold",
+      fontSize: "12px",
+      height: "fit-content",
+      marginTop: "8px",
+    } satisfies CSSProperties,
+    avisoSemValorStyle: {
+      marginTop: "12px",
+      padding: "10px 12px",
+      borderRadius: "10px",
+      background: "rgba(234,67,53,0.14)",
+      border: "1px solid rgba(234,67,53,0.35)",
+      color: "#ffb0b0",
+      fontWeight: "bold",
+      fontSize: "13px",
+      lineHeight: 1.35,
     } satisfies CSSProperties,
     arquivadoBadgeStyle: {
       display: "inline-block",
