@@ -769,7 +769,7 @@ export default function AdminCalendarioPage() {
         const dataInicioOriginal = processo.data_inicio_prevista
           ? parseDateOnly(processo.data_inicio_prevista)
           : hoje;
-        const dataInicioPreferida = maxData(dataInicioOriginal, hoje);
+        const dataInicioPreferida = dataInicioOriginal;
         let cursor = proximoDiaUtil(dataInicioPreferida);
         let valorRestante = valorTotalProcesso;
         let seguranca = 0;
