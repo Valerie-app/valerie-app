@@ -690,6 +690,21 @@ export default function AdminCalendarioPage() {
     return Math.max(Number(processo.dias_acabamento_previstos || 0), 0);
   }
 
+  function calcularProducaoFixaPorEntrega(processo: ProcessoCalendario) {
+    const diasProducao = obterDiasProducaoNecessarios(processo);
+
+    const dataLimite =
+      processo.data_inicio_acabamento_manual ||
+      processo.data_inicio_montagem_manual ||
+      processo.data_entrega_prevista ||
+      null;
+
+    if (!dataLimite || diasProducao <= 0) return [];
+
+    const diaFimProducao = diaUtilAnterior(parseDateOnly(dataLimite));
+    return subtrairDiasUteisAteFim(diaFimProducao, diasProducao);
+  }
+
   function calcularAcabamentosSemMexerNaProducao(
     processo: ProcessoCalendario,
     fimProducao: string | null,
@@ -792,6 +807,7 @@ export default function AdminCalendarioPage() {
         // mas não reserva dias nem valor na produção automática.
         datasProducao = [];
       } else if (temProducaoManual) {
+        // Datas manuais são sagradas: nunca são empurradas automaticamente.
         datasProducao = datasProducaoManuais;
         if (datasProducao.length > 0) {
           const valorPorDiaManual = valorTotalProcesso / datasProducao.length;
@@ -801,11 +817,27 @@ export default function AdminCalendarioPage() {
               (cargaProducaoPorDia[dataManual] || 0) + valorPorDiaManual;
           }
         }
+      } else if (
+        processo.data_inicio_montagem_manual ||
+        processo.data_entrega_prevista
+      ) {
+        // Se existe montagem/entrega definida, a obra fica fixa a essa data.
+        // A app avisa se estiver atrasada, mas não arrasta a obra para a frente.
+        datasProducao = calcularProducaoFixaPorEntrega(processo);
+        if (datasProducao.length > 0) {
+          const valorPorDiaFixo = valorTotalProcesso / datasProducao.length;
+          for (const dataFixa of datasProducao) {
+            valorProducaoPorDia[dataFixa] = valorPorDiaFixo;
+            cargaProducaoPorDia[dataFixa] =
+              (cargaProducaoPorDia[dataFixa] || 0) + valorPorDiaFixo;
+          }
+        }
       } else {
+        // Só obras sem data de entrega/montagem definida entram na fila automática.
         const dataInicioOriginal = processo.data_inicio_prevista
           ? parseDateOnly(processo.data_inicio_prevista)
           : hoje;
-        const dataInicioPreferida = dataInicioOriginal;
+        const dataInicioPreferida = maxData(dataInicioOriginal, hoje);
         let cursor = proximoDiaUtil(dataInicioPreferida);
         let valorRestante = valorTotalProcesso;
         let seguranca = 0;
@@ -938,6 +970,21 @@ export default function AdminCalendarioPage() {
           processo: planeamento.processo,
         });
         continue;
+      }
+
+      if (
+        planeamento.processo.data_entrega_prevista &&
+        diferencaDias(planeamento.processo.data_entrega_prevista) < 0
+      ) {
+        lista.push({
+          id: `${planeamento.processo.id}-entrega-atrasada`,
+          titulo: "Entrega atrasada",
+          texto: `${nome} tinha entrega em ${formatarData(planeamento.processo.data_entrega_prevista)}. A data ficou fixa e precisa de ação manual.`,
+          data: planeamento.processo.data_entrega_prevista,
+          diasAte: 0,
+          nivel: "urgente",
+          processo: planeamento.processo,
+        });
       }
 
       const eventos = [
