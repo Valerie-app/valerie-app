@@ -109,6 +109,11 @@ type AlertaPlaneamento = {
   processo: ProcessoCalendario;
 };
 
+type AlertaAdiado = {
+  data: string;
+  dias: number;
+};
+
 type ContactosEdit = {
   responsavel_obra_nome: string;
   responsavel_obra_email: string;
@@ -196,6 +201,12 @@ export default function AdminCalendarioPage() {
   >(null);
   const [processoAArquivar, setProcessoAArquivar] = useState<string | null>(
     null,
+  );
+  const [alertasConcluidos, setAlertasConcluidos] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [alertasAdiados, setAlertasAdiados] = useState<Record<string, AlertaAdiado>>(
+    {},
   );
 
   useEffect(() => {
@@ -690,8 +701,11 @@ export default function AdminCalendarioPage() {
     return Math.max(Number(processo.dias_acabamento_previstos || 0), 0);
   }
 
-  function calcularProducaoFixaPorEntrega(processo: ProcessoCalendario) {
-    const diasProducao = obterDiasProducaoNecessarios(processo);
+  function calcularProducaoFixaPorEntrega(
+    processo: ProcessoCalendario,
+    cargaProducaoPorDia: Record<string, number>,
+  ) {
+    const valorTotalProcesso = obterValorFinanceiroProcesso(processo);
 
     const dataLimite =
       processo.data_inicio_acabamento_manual ||
@@ -699,10 +713,49 @@ export default function AdminCalendarioPage() {
       processo.data_entrega_prevista ||
       null;
 
-    if (!dataLimite || diasProducao <= 0) return [];
+    if (!dataLimite || valorTotalProcesso <= 0) {
+      return {
+        datas: [] as string[],
+        valores: {} as Record<string, number>,
+        valorPorPlanear: valorTotalProcesso,
+        ficouSemCapacidade: false,
+      };
+    }
 
-    const diaFimProducao = diaUtilAnterior(parseDateOnly(dataLimite));
-    return subtrairDiasUteisAteFim(diaFimProducao, diasProducao);
+    const valores: Record<string, number> = {};
+    const datas: string[] = [];
+    let valorRestante = valorTotalProcesso;
+    let cursor = diaUtilAnterior(parseDateOnly(dataLimite));
+    let seguranca = 0;
+
+    while (valorRestante > 0.009 && seguranca < 1460) {
+      if (eDiaUtil(cursor)) {
+        const chave = formatarDataISO(cursor);
+        const cargaAtual = cargaProducaoPorDia[chave] || 0;
+        const capacidadeDisponivel =
+          resumo.objetivoDiario > 0
+            ? Math.max(resumo.objetivoDiario - cargaAtual, 0)
+            : valorRestante;
+
+        if (capacidadeDisponivel > 0) {
+          const valorAReservar = Math.min(valorRestante, capacidadeDisponivel);
+          valores[chave] = (valores[chave] || 0) + valorAReservar;
+          cargaProducaoPorDia[chave] = cargaAtual + valorAReservar;
+          if (!datas.includes(chave)) datas.unshift(chave);
+          valorRestante -= valorAReservar;
+        }
+      }
+
+      cursor.setDate(cursor.getDate() - 1);
+      seguranca += 1;
+    }
+
+    return {
+      datas,
+      valores,
+      valorPorPlanear: valorRestante,
+      ficouSemCapacidade: valorRestante > 0.009,
+    };
   }
 
   function calcularAcabamentosSemMexerNaProducao(
@@ -821,16 +874,26 @@ export default function AdminCalendarioPage() {
         processo.data_inicio_montagem_manual ||
         processo.data_entrega_prevista
       ) {
-        // Se existe montagem/entrega definida, a obra fica fixa a essa data.
-        // A app avisa se estiver atrasada, mas não arrasta a obra para a frente.
-        datasProducao = calcularProducaoFixaPorEntrega(processo);
-        if (datasProducao.length > 0) {
-          const valorPorDiaFixo = valorTotalProcesso / datasProducao.length;
-          for (const dataFixa of datasProducao) {
-            valorProducaoPorDia[dataFixa] = valorPorDiaFixo;
-            cargaProducaoPorDia[dataFixa] =
-              (cargaProducaoPorDia[dataFixa] || 0) + valorPorDiaFixo;
-          }
+        // Se existe montagem/entrega definida, a obra é planeada para trás,
+        // preenchendo os dias até ao valor máximo diário.
+        // Nunca empurra automaticamente para depois da entrega/montagem.
+        const producaoFixa = calcularProducaoFixaPorEntrega(
+          processo,
+          cargaProducaoPorDia,
+        );
+
+        datasProducao = producaoFixa.datas;
+
+        for (const [dataFixa, valorFixo] of Object.entries(
+          producaoFixa.valores,
+        )) {
+          valorProducaoPorDia[dataFixa] = valorFixo;
+        }
+
+        if (producaoFixa.ficouSemCapacidade) {
+          console.warn(
+            `Sem capacidade antes da entrega/montagem para ${processo.codigo_val || processo.id}. Valor por planear: ${producaoFixa.valorPorPlanear.toFixed(2)} €`,
+          );
         }
       } else {
         // Só obras sem data de entrega/montagem definida entram na fila automática.
@@ -979,8 +1042,28 @@ export default function AdminCalendarioPage() {
         lista.push({
           id: `${planeamento.processo.id}-entrega-atrasada`,
           titulo: "Entrega atrasada",
-          texto: `${nome} tinha entrega em ${formatarData(planeamento.processo.data_entrega_prevista)}. A data ficou fixa e precisa de ação manual.`,
+          texto: `${nome} tinha entrega em ${formatarData(planeamento.processo.data_entrega_prevista)}. A data ficou fixa. Confirma produção, montagem ou altera manualmente.`,
           data: planeamento.processo.data_entrega_prevista,
+          diasAte: 0,
+          nivel: "urgente",
+          processo: planeamento.processo,
+        });
+      }
+
+      if (
+        processoTemValorDefinido(planeamento.processo) &&
+        (planeamento.processo.data_inicio_montagem_manual ||
+          planeamento.processo.data_entrega_prevista) &&
+        planeamento.datasProducao.length === 0
+      ) {
+        lista.push({
+          id: `${planeamento.processo.id}-sem-capacidade-antes-entrega`,
+          titulo: "Sem capacidade antes da entrega",
+          texto: `${nome} tem entrega/montagem definida, mas não há capacidade diária disponível antes dessa data. A obra não foi empurrada para a frente.`,
+          data:
+            planeamento.processo.data_inicio_montagem_manual ||
+            planeamento.processo.data_entrega_prevista ||
+            formatarDataISO(hojeSemHoras()),
           diasAte: 0,
           nivel: "urgente",
           processo: planeamento.processo,
@@ -1039,8 +1122,22 @@ export default function AdminCalendarioPage() {
         });
       }
     }
-    return lista.sort((a, b) => a.diasAte - b.diasAte);
-  }, [planeamentosVisiveis]);
+    return lista
+      .filter((alerta) => !alertasConcluidos[alerta.id])
+      .map((alerta) => {
+        const adiado = alertasAdiados[alerta.id];
+        if (!adiado) return alerta;
+
+        return {
+          ...alerta,
+          titulo: `${alerta.titulo} · adiado`,
+          data: adiado.data,
+          diasAte: Math.max(diferencaDias(adiado.data), 0),
+          nivel: "normal" as const,
+        };
+      })
+      .sort((a, b) => a.diasAte - b.diasAte);
+  }, [planeamentosVisiveis, alertasConcluidos, alertasAdiados]);
 
   function obterPlaneamentoProcesso(processoId: string) {
     return planeamentos.find((item) => item.processo.id === processoId) || null;
@@ -1154,6 +1251,56 @@ export default function AdminCalendarioPage() {
       border: "1px solid rgba(66,133,244,0.35)",
       color: "#9fc3ff",
     };
+  }
+
+  function concluirAlerta(alertaId: string) {
+    setAlertasConcluidos((prev) => ({ ...prev, [alertaId]: true }));
+    setMensagem("Alerta concluído.");
+  }
+
+  function adiarAlerta(alerta: AlertaPlaneamento) {
+    const dataBase = parseDateOnly(alerta.data);
+    dataBase.setDate(dataBase.getDate() + 1);
+    const novaData = formatarDataISO(dataBase);
+
+    setAlertasAdiados((prev) => ({
+      ...prev,
+      [alerta.id]: { data: novaData, dias: 1 },
+    }));
+    setMensagem(`Alerta adiado para ${formatarData(novaData)}.`);
+  }
+
+  function editarObraDoAlerta(alerta: AlertaPlaneamento) {
+    setTipoCalendario("acabamentos");
+    setCartoesAbertos((prev) => ({
+      ...prev,
+      [alerta.processo.id]: true,
+    }));
+    setMensagem(
+      `Obra aberta para edição: ${alerta.processo.codigo_val || "Sem VAL"} · ${
+        alerta.processo.nome_obra || "Sem nome"
+      }`,
+    );
+  }
+
+  function abrirObraDoAlerta(alerta: AlertaPlaneamento) {
+    const planeamento = obterPlaneamentoProcesso(alerta.processo.id);
+
+    if (planeamento?.inicioProducao) {
+      const data = parseDateOnly(planeamento.inicioProducao);
+      setMesAtual(new Date(data.getFullYear(), data.getMonth(), 1));
+    }
+
+    setTipoCalendario("producao");
+    setCartoesAbertos((prev) => ({
+      ...prev,
+      [alerta.processo.id]: true,
+    }));
+    setMensagem(
+      `Obra aberta: ${alerta.processo.codigo_val || "Sem VAL"} · ${
+        alerta.processo.nome_obra || "Sem nome"
+      }`,
+    );
   }
 
   function limparFiltros() {
@@ -2036,6 +2183,37 @@ export default function AdminCalendarioPage() {
                         {alerta.diasAte === 0
                           ? "hoje"
                           : `em ${alerta.diasAte} dias`}
+                      </div>
+
+                      <div style={estilos.alertaAcoesStyle}>
+                        <button
+                          type="button"
+                          onClick={() => concluirAlerta(alerta.id)}
+                          style={estilos.botaoAlertaConcluirStyle}
+                        >
+                          ✅ Concluir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => adiarAlerta(alerta)}
+                          style={estilos.botaoAlertaSecundarioStyle}
+                        >
+                          ⏸️ Adiar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => editarObraDoAlerta(alerta)}
+                          style={estilos.botaoAlertaSecundarioStyle}
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => abrirObraDoAlerta(alerta)}
+                          style={estilos.botaoAlertaSecundarioStyle}
+                        >
+                          👁️ Abrir obra
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -3363,6 +3541,32 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       marginTop: "8px",
       fontSize: "12px",
       fontWeight: "bold",
+    } satisfies CSSProperties,
+    alertaAcoesStyle: {
+      display: "flex",
+      gap: "8px",
+      flexWrap: "wrap",
+      marginTop: "12px",
+    } satisfies CSSProperties,
+    botaoAlertaConcluirStyle: {
+      background: "rgba(52,168,83,0.25)",
+      color: "#b9ffc8",
+      border: "1px solid rgba(52,168,83,0.55)",
+      borderRadius: "9px",
+      padding: "8px 10px",
+      fontWeight: "bold",
+      cursor: "pointer",
+      fontSize: "12px",
+    } satisfies CSSProperties,
+    botaoAlertaSecundarioStyle: {
+      background: "rgba(255,255,255,0.08)",
+      color: "white",
+      border: "1px solid rgba(255,255,255,0.14)",
+      borderRadius: "9px",
+      padding: "8px 10px",
+      fontWeight: "bold",
+      cursor: "pointer",
+      fontSize: "12px",
     } satisfies CSSProperties,
     timelineGridStyle: {
       display: "grid",
