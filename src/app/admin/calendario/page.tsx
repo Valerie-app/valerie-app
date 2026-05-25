@@ -80,7 +80,7 @@ type DiaMes = {
   pertenceAoMesAtual: boolean;
 };
 
-type TipoCalendario = "producao" | "acabamentos" | "montagens";
+type TipoCalendario = "producao" | "acabamentos" | "montagens" | "desenhos";
 type FiltroArquivo = "ativas" | "arquivadas" | "todas";
 
 type PlaneamentoProcesso = {
@@ -206,6 +206,12 @@ export default function AdminCalendarioPage() {
     {},
   );
   const [alertasAdiados, setAlertasAdiados] = useState<Record<string, AlertaAdiado>>(
+    {},
+  );
+  const [desenhosConcluidos, setDesenhosConcluidos] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [desenhosAdiados, setDesenhosAdiados] = useState<Record<string, string>>(
     {},
   );
 
@@ -572,6 +578,24 @@ export default function AdminCalendarioPage() {
       processo.data_inicio_prevista ||
       null
     );
+  }
+
+  function obterDataPrioridadeDesenho(processo: ProcessoCalendario) {
+    return (
+      desenhosAdiados[processo.id] ||
+      processo.data_inicio_montagem_manual ||
+      processo.data_entrega_prevista ||
+      processo.data_fim_montagem_manual ||
+      null
+    );
+  }
+
+  function obterOrigemDataDesenho(processo: ProcessoCalendario) {
+    if (desenhosAdiados[processo.id]) return "Adiado";
+    if (processo.data_inicio_montagem_manual) return "Montagem";
+    if (processo.data_entrega_prevista) return "Entrega";
+    if (processo.data_fim_montagem_manual) return "Fim montagem";
+    return "Sem data";
   }
 
   const processosValidados = useMemo(
@@ -991,6 +1015,24 @@ export default function AdminCalendarioPage() {
     return planeamentos.filter((item) => idsVisiveis.has(item.processo.id));
   }, [planeamentos, processosVisiveis]);
 
+  const desenhosTecnicos = useMemo(() => {
+    return [...processosVisiveis]
+      .filter((processo) => !desenhosConcluidos[processo.id])
+      .sort((a, b) => {
+        const dataA = obterDataPrioridadeDesenho(a);
+        const dataB = obterDataPrioridadeDesenho(b);
+
+        const tempoA = dataA ? parseDateOnly(dataA).getTime() : Infinity;
+        const tempoB = dataB ? parseDateOnly(dataB).getTime() : Infinity;
+
+        if (tempoA !== tempoB) return tempoA - tempoB;
+
+        const valA = normalizarTexto(a.codigo_val);
+        const valB = normalizarTexto(b.codigo_val);
+        return valA.localeCompare(valB);
+      });
+  }, [processosVisiveis, desenhosConcluidos, desenhosAdiados]);
+
   const valorOcupadoMes = useMemo(() => {
     const ano = mesAtual.getFullYear();
     const mes = mesAtual.getMonth();
@@ -1152,7 +1194,9 @@ export default function AdminCalendarioPage() {
         return item.datasProducao.includes(chave);
       if (tipoCalendario === "acabamentos")
         return item.datasAcabamento.includes(chave);
-      return item.datasMontagem.includes(chave);
+      if (tipoCalendario === "montagens")
+        return item.datasMontagem.includes(chave);
+      return false;
     });
   }
 
@@ -1299,6 +1343,55 @@ export default function AdminCalendarioPage() {
     setMensagem(
       `Obra aberta: ${alerta.processo.codigo_val || "Sem VAL"} · ${
         alerta.processo.nome_obra || "Sem nome"
+      }`,
+    );
+  }
+
+  function concluirDesenho(processo: ProcessoCalendario) {
+    setDesenhosConcluidos((prev) => ({ ...prev, [processo.id]: true }));
+    setMensagem(
+      `Desenho concluído: ${processo.codigo_val || "Sem VAL"} · ${
+        processo.nome_obra || "Sem nome"
+      }`,
+    );
+  }
+
+  function adiarDesenho(processo: ProcessoCalendario) {
+    const dataPrioridade = obterDataPrioridadeDesenho(processo);
+    const dataBase = dataPrioridade ? parseDateOnly(dataPrioridade) : hojeSemHoras();
+    dataBase.setDate(dataBase.getDate() + 1);
+    const novaData = formatarDataISO(dataBase);
+
+    setDesenhosAdiados((prev) => ({ ...prev, [processo.id]: novaData }));
+    setMensagem(
+      `Desenho adiado para ${formatarData(novaData)}: ${
+        processo.codigo_val || "Sem VAL"
+      } · ${processo.nome_obra || "Sem nome"}`,
+    );
+  }
+
+  function editarDesenho(processo: ProcessoCalendario) {
+    setTipoCalendario("acabamentos");
+    setCartoesAbertos((prev) => ({ ...prev, [processo.id]: true }));
+    setMensagem(
+      `Obra aberta para edição: ${processo.codigo_val || "Sem VAL"} · ${
+        processo.nome_obra || "Sem nome"
+      }`,
+    );
+  }
+
+  function abrirObraDesenho(processo: ProcessoCalendario) {
+    const dataPrioridade = obterDataPrioridadeDesenho(processo);
+    if (dataPrioridade) {
+      const data = parseDateOnly(dataPrioridade);
+      setMesAtual(new Date(data.getFullYear(), data.getMonth(), 1));
+    }
+
+    setTipoCalendario("producao");
+    setCartoesAbertos((prev) => ({ ...prev, [processo.id]: true }));
+    setMensagem(
+      `Obra aberta: ${processo.codigo_val || "Sem VAL"} · ${
+        processo.nome_obra || "Sem nome"
       }`,
     );
   }
@@ -2035,6 +2128,16 @@ export default function AdminCalendarioPage() {
           >
             Montagens
           </button>
+          <button
+            type="button"
+            onClick={() => setTipoCalendario("desenhos")}
+            style={{
+              ...estilos.tabStyle,
+              ...(tipoCalendario === "desenhos" ? estilos.tabAtivaStyle : {}),
+            }}
+          >
+            Desenhos Técnicos
+          </button>
         </div>
 
         <div style={estilos.mesAtualStyle}>{formatarMesAno(mesAtual)}</div>
@@ -2767,7 +2870,126 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
-            <div style={estilos.calendarCardStyle}>
+            {tipoCalendario === "desenhos" && (
+              <div style={estilos.cardStyle}>
+                <div style={estilos.tituloComAcoesStyle}>
+                  <div>
+                    <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
+                      Desenhos Técnicos
+                    </h2>
+                    <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
+                      Lista simples por ordem cronológica: primeiro data de montagem, depois data de entrega. Esta vista é só para organizar desenhos e não mexe na produção.
+                    </p>
+                  </div>
+                  <div style={estilos.timelineBadgeStyle}>
+                    {desenhosTecnicos.length} obras
+                  </div>
+                </div>
+
+                <div style={estilos.desenhosListaStyle}>
+                  {desenhosTecnicos.length === 0 ? (
+                    <div style={estilos.semItensStyle}>
+                      Sem desenhos técnicos pendentes nesta vista.
+                    </div>
+                  ) : (
+                    desenhosTecnicos.map((processo, index) => {
+                      const dataPrioridade = obterDataPrioridadeDesenho(processo);
+                      const origemData = obterOrigemDataDesenho(processo);
+                      const diasAte = dataPrioridade
+                        ? diferencaDias(dataPrioridade)
+                        : null;
+
+                      return (
+                        <div key={processo.id} style={estilos.desenhoCardStyle}>
+                          <div style={estilos.desenhoNumeroStyle}>
+                            #{index + 1}
+                          </div>
+
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={estilos.timelineTituloStyle}>
+                              {processo.codigo_val || "Sem VAL"} ·{" "}
+                              {processo.nome_obra || "Sem nome"}
+                            </div>
+                            <div style={estilos.subtextoStyle}>
+                              Cliente: {processo.nome_cliente || "—"}
+                            </div>
+
+                            <div style={estilos.desenhoDatasStyle}>
+                              <span>
+                                Montagem:{" "}
+                                {formatarData(processo.data_inicio_montagem_manual)}
+                              </span>
+                              <span>
+                                Entrega: {formatarData(processo.data_entrega_prevista)}
+                              </span>
+                              <span>
+                                Prioridade:{" "}
+                                {dataPrioridade
+                                  ? `${formatarData(dataPrioridade)} · ${origemData}`
+                                  : "Sem data"}
+                              </span>
+                              {diasAte !== null && (
+                                <span
+                                  style={{
+                                    color:
+                                      diasAte < 0
+                                        ? "#ffb0b0"
+                                        : diasAte <= 3
+                                          ? "#ffd76c"
+                                          : "#9fc3ff",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  {diasAte < 0
+                                    ? `Atrasado ${Math.abs(diasAte)} dias`
+                                    : diasAte === 0
+                                      ? "Hoje"
+                                      : `Em ${diasAte} dias`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={estilos.desenhoAcoesStyle}>
+                            <button
+                              type="button"
+                              onClick={() => concluirDesenho(processo)}
+                              style={estilos.botaoAlertaConcluirStyle}
+                            >
+                              ✅ Concluir
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => adiarDesenho(processo)}
+                              style={estilos.botaoAlertaSecundarioStyle}
+                            >
+                              ⏸️ Adiar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => editarDesenho(processo)}
+                              style={estilos.botaoAlertaSecundarioStyle}
+                            >
+                              ✏️ Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => abrirObraDesenho(processo)}
+                              style={estilos.botaoAlertaSecundarioStyle}
+                            >
+                              👁️ Abrir obra
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {tipoCalendario !== "desenhos" && (
+              <div style={estilos.calendarCardStyle}>
               <div style={estilos.diasSemanaHeaderStyle}>
                 {nomesDias.map((dia, index) => (
                   <div
@@ -2942,6 +3164,7 @@ export default function AdminCalendarioPage() {
                 })}
               </div>
             </div>
+            )}
           </>
         )}
 
@@ -3572,6 +3795,48 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
       display: "grid",
       gap: "12px",
       marginTop: "14px",
+    } satisfies CSSProperties,
+    desenhosListaStyle: {
+      display: "grid",
+      gap: "12px",
+      marginTop: "14px",
+    } satisfies CSSProperties,
+    desenhoCardStyle: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "14px",
+      padding: "14px",
+      borderRadius: "14px",
+      background: "rgba(255,255,255,0.045)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      flexDirection: eDesktop ? "row" : "column",
+    } satisfies CSSProperties,
+    desenhoNumeroStyle: {
+      width: "42px",
+      height: "42px",
+      borderRadius: "999px",
+      background: "rgba(92,115,199,0.28)",
+      border: "1px solid rgba(92,115,199,0.50)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontWeight: "bold",
+      flexShrink: 0,
+    } satisfies CSSProperties,
+    desenhoDatasStyle: {
+      display: "grid",
+      gridTemplateColumns: eDesktop ? "repeat(4, minmax(0, 1fr))" : "1fr",
+      gap: "8px",
+      marginTop: "10px",
+      fontSize: "13px",
+      opacity: 0.9,
+    } satisfies CSSProperties,
+    desenhoAcoesStyle: {
+      display: "flex",
+      gap: "8px",
+      flexWrap: "wrap",
+      justifyContent: eDesktop ? "flex-end" : "flex-start",
+      minWidth: eDesktop ? "360px" : "100%",
     } satisfies CSSProperties,
     timelineCardStyle: {
       padding: "14px",
