@@ -80,7 +80,7 @@ type DiaMes = {
   pertenceAoMesAtual: boolean;
 };
 
-type TipoCalendario = "producao" | "acabamentos" | "montagens" | "desenhos";
+type TipoCalendario = "producao" | "acabamentos" | "montagens" | "desenhos" | "detalhes";
 type FiltroArquivo = "ativas" | "arquivadas" | "todas";
 
 type PlaneamentoProcesso = {
@@ -1371,7 +1371,7 @@ export default function AdminCalendarioPage() {
   }
 
   function editarObraDoAlerta(alerta: AlertaPlaneamento) {
-    setTipoCalendario("acabamentos");
+    setTipoCalendario("detalhes");
     setCartoesAbertos((prev) => ({
       ...prev,
       [alerta.processo.id]: true,
@@ -1391,7 +1391,7 @@ export default function AdminCalendarioPage() {
       setMesAtual(new Date(data.getFullYear(), data.getMonth(), 1));
     }
 
-    setTipoCalendario("producao");
+    setTipoCalendario("detalhes");
     setCartoesAbertos((prev) => ({
       ...prev,
       [alerta.processo.id]: true,
@@ -1427,7 +1427,7 @@ export default function AdminCalendarioPage() {
   }
 
   function editarDesenho(processo: ProcessoCalendario) {
-    setTipoCalendario("acabamentos");
+    setTipoCalendario("detalhes");
     setCartoesAbertos((prev) => ({ ...prev, [processo.id]: true }));
     setMensagem(
       `Obra aberta para edição: ${processo.codigo_val || "Sem VAL"} · ${
@@ -1443,7 +1443,7 @@ export default function AdminCalendarioPage() {
       setMesAtual(new Date(data.getFullYear(), data.getMonth(), 1));
     }
 
-    setTipoCalendario("producao");
+    setTipoCalendario("detalhes");
     setCartoesAbertos((prev) => ({ ...prev, [processo.id]: true }));
     setMensagem(
       `Obra aberta: ${processo.codigo_val || "Sem VAL"} · ${
@@ -2162,6 +2162,7 @@ export default function AdminCalendarioPage() {
           >
             Desenhos Técnicos
           </button>
+
           <button
             type="button"
             onClick={() => setTipoCalendario("producao")}
@@ -2172,18 +2173,18 @@ export default function AdminCalendarioPage() {
           >
             Produção
           </button>
+
           <button
             type="button"
             onClick={() => setTipoCalendario("acabamentos")}
             style={{
               ...estilos.tabStyle,
-              ...(tipoCalendario === "acabamentos"
-                ? estilos.tabAtivaStyle
-                : {}),
+              ...(tipoCalendario === "acabamentos" ? estilos.tabAtivaStyle : {}),
             }}
           >
             Acabamentos
           </button>
+
           <button
             type="button"
             onClick={() => setTipoCalendario("montagens")}
@@ -2193,6 +2194,17 @@ export default function AdminCalendarioPage() {
             }}
           >
             Montagens
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTipoCalendario("detalhes")}
+            style={{
+              ...estilos.tabStyle,
+              ...(tipoCalendario === "detalhes" ? estilos.tabAtivaStyle : {}),
+            }}
+          >
+            Detalhes de Obra
           </button>
         </div>
 
@@ -2498,7 +2510,7 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
-            {tipoCalendario !== "desenhos" && (
+            {tipoCalendario !== "desenhos" && tipoCalendario !== "detalhes" && (
               <>
                 <div style={estilos.calendarCardStyle}>
               <div style={estilos.diasSemanaHeaderStyle}>
@@ -2675,20 +2687,18 @@ export default function AdminCalendarioPage() {
                 })}
               </div>
             </div>
+              </>
+            )}
 
-            {(tipoCalendario === "acabamentos" ||
-              tipoCalendario === "montagens") && (
+            {tipoCalendario === "detalhes" && (
               <div style={estilos.cardStyle}>
                 <div style={estilos.tituloComAcoesStyle}>
                   <div>
                     <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
-                      {tipoCalendario === "acabamentos"
-                        ? "Linha temporal de acabamentos"
-                        : "Linha temporal de montagens / entregas"}
+                      Detalhes de Obra
                     </h2>
                     <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
-                      Os cartões começam minimizados. Abre apenas a obra que
-                      queres editar.
+                      Centro principal de edição da obra. As datas e responsáveis alterados aqui aparecem automaticamente nos calendários.
                     </p>
                   </div>
                   <div style={estilos.acoesInlineStyle}>
@@ -2768,9 +2778,7 @@ export default function AdminCalendarioPage() {
                                 </div>
                               )}
                               <div style={estilos.timelineBadgeStyle}>
-                                {tipoCalendario === "acabamentos"
-                                  ? `${item.datasAcabamento.length} dias acab.`
-                                  : `${item.datasMontagem.length} dias montagem`}
+                                {`${item.datasAcabamento.length} dias acab. · ${item.datasMontagem.length} dias montagem`}
                               </div>
                             </div>
                           </div>
@@ -2802,9 +2810,7 @@ export default function AdminCalendarioPage() {
                               style={{
                                 ...estilos.timelineBarraStyle,
                                 background:
-                                  tipoCalendario === "montagens"
-                                    ? "linear-gradient(90deg, rgba(156,39,176,0.35), rgba(186,104,200,0.95))"
-                                    : "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(66,133,244,0.95))",
+                                  "linear-gradient(90deg, rgba(66,133,244,0.35), rgba(186,104,200,0.95))",
                               }}
                             />
                           </div>
@@ -3222,8 +3228,6 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
-              </>
-            )}
           </>
         )}
 
