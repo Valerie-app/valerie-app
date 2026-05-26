@@ -155,7 +155,7 @@ export default function AdminCalendarioPage() {
 
   const [larguraJanela, setLarguraJanela] = useState(1200);
   const [tipoCalendario, setTipoCalendario] =
-    useState<TipoCalendario>("producao");
+    useState<TipoCalendario>("desenhos");
   const [filtroArquivo, setFiltroArquivo] = useState<FiltroArquivo>("ativas");
   const [pesquisa, setPesquisa] = useState("");
   const [filtroEstado, setFiltroEstado] =
@@ -2098,6 +2098,16 @@ export default function AdminCalendarioPage() {
         <div style={estilos.tabsStyle}>
           <button
             type="button"
+            onClick={() => setTipoCalendario("desenhos")}
+            style={{
+              ...estilos.tabStyle,
+              ...(tipoCalendario === "desenhos" ? estilos.tabAtivaStyle : {}),
+            }}
+          >
+            Desenhos Técnicos
+          </button>
+          <button
+            type="button"
             onClick={() => setTipoCalendario("producao")}
             style={{
               ...estilos.tabStyle,
@@ -2127,16 +2137,6 @@ export default function AdminCalendarioPage() {
             }}
           >
             Montagens
-          </button>
-          <button
-            type="button"
-            onClick={() => setTipoCalendario("desenhos")}
-            style={{
-              ...estilos.tabStyle,
-              ...(tipoCalendario === "desenhos" ? estilos.tabAtivaStyle : {}),
-            }}
-          >
-            Desenhos Técnicos
           </button>
         </div>
 
@@ -2324,6 +2324,302 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
+            {tipoCalendario === "desenhos" && (
+              <div style={estilos.cardStyle}>
+                <div style={estilos.tituloComAcoesStyle}>
+                  <div>
+                    <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
+                      Desenhos Técnicos
+                    </h2>
+                    <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
+                      Lista simples por ordem cronológica: primeiro data de montagem, depois data de entrega. Esta vista é só para organizar desenhos e não mexe na produção.
+                    </p>
+                  </div>
+                  <div style={estilos.timelineBadgeStyle}>
+                    {desenhosTecnicos.length} obras
+                  </div>
+                </div>
+
+                <div style={estilos.desenhosListaStyle}>
+                  {desenhosTecnicos.length === 0 ? (
+                    <div style={estilos.semItensStyle}>
+                      Sem desenhos técnicos pendentes nesta vista.
+                    </div>
+                  ) : (
+                    desenhosTecnicos.map((processo, index) => {
+                      const dataPrioridade = obterDataPrioridadeDesenho(processo);
+                      const origemData = obterOrigemDataDesenho(processo);
+                      const diasAte = dataPrioridade
+                        ? diferencaDias(dataPrioridade)
+                        : null;
+
+                      return (
+                        <div key={processo.id} style={estilos.desenhoCardStyle}>
+                          <div style={estilos.desenhoNumeroStyle}>
+                            #{index + 1}
+                          </div>
+
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={estilos.timelineTituloStyle}>
+                              {processo.codigo_val || "Sem VAL"} ·{" "}
+                              {processo.nome_obra || "Sem nome"}
+                            </div>
+                            <div style={estilos.subtextoStyle}>
+                              Cliente: {processo.nome_cliente || "—"}
+                            </div>
+
+                            <div style={estilos.desenhoDatasStyle}>
+                              <span>
+                                Montagem:{" "}
+                                {formatarData(processo.data_inicio_montagem_manual)}
+                              </span>
+                              <span>
+                                Entrega: {formatarData(processo.data_entrega_prevista)}
+                              </span>
+                              <span>
+                                Prioridade:{" "}
+                                {dataPrioridade
+                                  ? `${formatarData(dataPrioridade)} · ${origemData}`
+                                  : "Sem data"}
+                              </span>
+                              {diasAte !== null && (
+                                <span
+                                  style={{
+                                    color:
+                                      diasAte < 0
+                                        ? "#ffb0b0"
+                                        : diasAte <= 3
+                                          ? "#ffd76c"
+                                          : "#9fc3ff",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  {diasAte < 0
+                                    ? `Atrasado ${Math.abs(diasAte)} dias`
+                                    : diasAte === 0
+                                      ? "Hoje"
+                                      : `Em ${diasAte} dias`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={estilos.desenhoAcoesStyle}>
+                            <button
+                              type="button"
+                              onClick={() => concluirDesenho(processo)}
+                              style={estilos.botaoAlertaConcluirStyle}
+                            >
+                              ✅ Concluir
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => adiarDesenho(processo)}
+                              style={estilos.botaoAlertaSecundarioStyle}
+                            >
+                              ⏸️ Adiar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => editarDesenho(processo)}
+                              style={estilos.botaoAlertaSecundarioStyle}
+                            >
+                              ✏️ Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => abrirObraDesenho(processo)}
+                              style={estilos.botaoAlertaSecundarioStyle}
+                            >
+                              👁️ Abrir obra
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {tipoCalendario !== "desenhos" && (
+              <>
+                <div style={estilos.calendarCardStyle}>
+              <div style={estilos.diasSemanaHeaderStyle}>
+                {nomesDias.map((dia, index) => (
+                  <div
+                    key={`${dia}-${index}`}
+                    style={estilos.diaSemanaHeaderItemStyle}
+                  >
+                    {dia}
+                  </div>
+                ))}
+              </div>
+
+              <div style={estilos.grelhaMesStyle}>
+                {diasDoMes.map((dia) => {
+                  const processosDoDia = obterProcessosDoDia(dia.data);
+                  const bloqueio = obterBloqueioDoDia(dia.data);
+                  const desbloqueadoFimSemana = eDesbloqueioFimSemana(bloqueio);
+                  const hoje = formatarDataISO(new Date()) === dia.chave;
+                  const valorDia = obterValorPrevistoDoDia(dia.data);
+                  const diasFinanceirosDia = obterDiasFinanceirosDoDia(
+                    dia.data,
+                  );
+                  const estiloFinanceiro = obterEstiloFinanceiroDia(
+                    valorDia,
+                    resumo.objetivoDiario,
+                  );
+                  const limiteEventos =
+                    tipoCalendario === "producao" ? (eDesktop ? 3 : 2) : 1;
+                  const fimSemana = eFimDeSemana(dia.data);
+                  const bloqueadoVisual =
+                    eBloqueioManual(dia.data) ||
+                    (fimSemana && !desbloqueadoFimSemana);
+
+                  return (
+                    <button
+                      key={dia.chave}
+                      type="button"
+                      onClick={() => abrirModalBloqueio(dia.data)}
+                      style={{
+                        ...estilos.diaMesCardStyle,
+                        opacity: dia.pertenceAoMesAtual ? 1 : 0.42,
+                        border: hoje
+                          ? "1px solid rgba(66,133,244,0.95)"
+                          : "1px solid rgba(255,255,255,0.06)",
+                        background: bloqueadoVisual
+                          ? "rgba(160,82,45,0.13)"
+                          : fimSemana && desbloqueadoFimSemana
+                            ? "rgba(52,168,83,0.08)"
+                            : "rgba(255,255,255,0.01)",
+                        boxShadow: hoje
+                          ? "inset 0 0 0 1px rgba(66,133,244,0.4)"
+                          : "none",
+                      }}
+                    >
+                      <div style={estilos.topoDiaStyle}>
+                        <div
+                          style={{
+                            ...estilos.numeroDiaStyle,
+                            background: hoje
+                              ? "rgba(66,133,244,0.95)"
+                              : "transparent",
+                            color: hoje ? "white" : "inherit",
+                          }}
+                        >
+                          {dia.dia}
+                        </div>
+                        <div
+                          style={{
+                            ...estilos.financeBadgeStyle,
+                            background: estiloFinanceiro.fundo,
+                            border: `1px solid ${estiloFinanceiro.borda}`,
+                            color: estiloFinanceiro.texto,
+                          }}
+                        >
+                          {tipoCalendario === "producao"
+                            ? `${valorDia.toFixed(0)} €`
+                            : tipoCalendario === "acabamentos"
+                              ? `${processosDoDia.length} acab.`
+                              : `${processosDoDia.length} mont.`}
+                        </div>
+                      </div>
+
+                      <div style={estilos.eventosDiaStyle}>
+                        {bloqueadoVisual && (
+                          <div
+                            style={{
+                              ...estilos.eventoStyle,
+                              background: "rgba(160,82,45,0.90)",
+                              border: "1px solid rgba(160,82,45,1)",
+                            }}
+                          >
+                            {fimSemana && !eBloqueioManual(dia.data)
+                              ? "Fim semana"
+                              : "Bloqueado"}
+                          </div>
+                        )}
+                        {fimSemana && desbloqueadoFimSemana && (
+                          <div
+                            style={{
+                              ...estilos.eventoStyle,
+                              background: "rgba(52,168,83,0.70)",
+                              border: "1px solid rgba(52,168,83,1)",
+                            }}
+                          >
+                            Desbloqueado
+                          </div>
+                        )}
+                        {processosDoDia.length === 0 &&
+                        !bloqueadoVisual &&
+                        !desbloqueadoFimSemana ? (
+                          <div style={estilos.diaVazioStyle}>—</div>
+                        ) : (
+                          processosDoDia
+                            .slice(0, limiteEventos)
+                            .map((processo) => {
+                              const planeamento = obterPlaneamentoProcesso(
+                                processo.id,
+                              );
+                              const cores = obterCoresEstado(processo.estado);
+                              const valorProcessoDia =
+                                obterValorProducaoDoProcessoNoDia(
+                                  processo.id,
+                                  dia.data,
+                                );
+                              return (
+                                <div
+                                  key={`${dia.chave}-${processo.id}`}
+                                  title={`${processo.codigo_val || "Sem VAL"} | ${processo.nome_obra || "Obra"} | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`}
+                                  style={{
+                                    ...estilos.eventoStyle,
+                                    background: cores.fundo,
+                                    border: `1px solid ${cores.borda}`,
+                                  }}
+                                >
+                                  {planeamento?.temDatasManuais ? "✎ " : ""}
+                                  {!processoTemValorDefinido(processo) ? "⚠ " : ""}
+                                  {processo.calendario_arquivado ? "🗄 " : ""}
+                                  {processo.codigo_val || "Sem VAL"} ·{" "}
+                                  {processo.nome_obra ||
+                                    processo.nome_cliente ||
+                                    "Sem nome"}
+                                </div>
+                              );
+                            })
+                        )}
+                        {processosDoDia.length > limiteEventos && (
+                          <div style={estilos.maisEventosStyle}>
+                            +{processosDoDia.length - limiteEventos} mais
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          ...estilos.rodapeFinanceiroDiaStyle,
+                          background: estiloFinanceiro.fundo,
+                          border: `1px solid ${estiloFinanceiro.borda}`,
+                        }}
+                      >
+                        <div style={{ color: estiloFinanceiro.texto }}>
+                          {tipoCalendario === "producao"
+                            ? `${diasFinanceirosDia.toFixed(2)} dias`
+                            : `${processosDoDia.length} obras`}
+                        </div>
+                        <div style={{ opacity: 0.8 }}>
+                          {tipoCalendario === "producao"
+                            ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €`
+                            : "Timeline abaixo"}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {(tipoCalendario === "acabamentos" ||
               tipoCalendario === "montagens") && (
               <div style={estilos.cardStyle}>
@@ -2332,7 +2628,7 @@ export default function AdminCalendarioPage() {
                     <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
                       {tipoCalendario === "acabamentos"
                         ? "Linha temporal de acabamentos"
-                        : "Linha temporal de montagens"}
+                        : "Linha temporal de montagens / entregas"}
                     </h2>
                     <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
                       Os cartões começam minimizados. Abre apenas a obra que
@@ -2870,300 +3166,7 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
-            {tipoCalendario === "desenhos" && (
-              <div style={estilos.cardStyle}>
-                <div style={estilos.tituloComAcoesStyle}>
-                  <div>
-                    <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
-                      Desenhos Técnicos
-                    </h2>
-                    <p style={{ ...estilos.metaAjudaStyle, marginTop: 0 }}>
-                      Lista simples por ordem cronológica: primeiro data de montagem, depois data de entrega. Esta vista é só para organizar desenhos e não mexe na produção.
-                    </p>
-                  </div>
-                  <div style={estilos.timelineBadgeStyle}>
-                    {desenhosTecnicos.length} obras
-                  </div>
-                </div>
-
-                <div style={estilos.desenhosListaStyle}>
-                  {desenhosTecnicos.length === 0 ? (
-                    <div style={estilos.semItensStyle}>
-                      Sem desenhos técnicos pendentes nesta vista.
-                    </div>
-                  ) : (
-                    desenhosTecnicos.map((processo, index) => {
-                      const dataPrioridade = obterDataPrioridadeDesenho(processo);
-                      const origemData = obterOrigemDataDesenho(processo);
-                      const diasAte = dataPrioridade
-                        ? diferencaDias(dataPrioridade)
-                        : null;
-
-                      return (
-                        <div key={processo.id} style={estilos.desenhoCardStyle}>
-                          <div style={estilos.desenhoNumeroStyle}>
-                            #{index + 1}
-                          </div>
-
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={estilos.timelineTituloStyle}>
-                              {processo.codigo_val || "Sem VAL"} ·{" "}
-                              {processo.nome_obra || "Sem nome"}
-                            </div>
-                            <div style={estilos.subtextoStyle}>
-                              Cliente: {processo.nome_cliente || "—"}
-                            </div>
-
-                            <div style={estilos.desenhoDatasStyle}>
-                              <span>
-                                Montagem:{" "}
-                                {formatarData(processo.data_inicio_montagem_manual)}
-                              </span>
-                              <span>
-                                Entrega: {formatarData(processo.data_entrega_prevista)}
-                              </span>
-                              <span>
-                                Prioridade:{" "}
-                                {dataPrioridade
-                                  ? `${formatarData(dataPrioridade)} · ${origemData}`
-                                  : "Sem data"}
-                              </span>
-                              {diasAte !== null && (
-                                <span
-                                  style={{
-                                    color:
-                                      diasAte < 0
-                                        ? "#ffb0b0"
-                                        : diasAte <= 3
-                                          ? "#ffd76c"
-                                          : "#9fc3ff",
-                                    fontWeight: "bold",
-                                  }}
-                                >
-                                  {diasAte < 0
-                                    ? `Atrasado ${Math.abs(diasAte)} dias`
-                                    : diasAte === 0
-                                      ? "Hoje"
-                                      : `Em ${diasAte} dias`}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div style={estilos.desenhoAcoesStyle}>
-                            <button
-                              type="button"
-                              onClick={() => concluirDesenho(processo)}
-                              style={estilos.botaoAlertaConcluirStyle}
-                            >
-                              ✅ Concluir
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => adiarDesenho(processo)}
-                              style={estilos.botaoAlertaSecundarioStyle}
-                            >
-                              ⏸️ Adiar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => editarDesenho(processo)}
-                              style={estilos.botaoAlertaSecundarioStyle}
-                            >
-                              ✏️ Editar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => abrirObraDesenho(processo)}
-                              style={estilos.botaoAlertaSecundarioStyle}
-                            >
-                              👁️ Abrir obra
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-
-            {tipoCalendario !== "desenhos" && (
-              <div style={estilos.calendarCardStyle}>
-              <div style={estilos.diasSemanaHeaderStyle}>
-                {nomesDias.map((dia, index) => (
-                  <div
-                    key={`${dia}-${index}`}
-                    style={estilos.diaSemanaHeaderItemStyle}
-                  >
-                    {dia}
-                  </div>
-                ))}
-              </div>
-
-              <div style={estilos.grelhaMesStyle}>
-                {diasDoMes.map((dia) => {
-                  const processosDoDia = obterProcessosDoDia(dia.data);
-                  const bloqueio = obterBloqueioDoDia(dia.data);
-                  const desbloqueadoFimSemana = eDesbloqueioFimSemana(bloqueio);
-                  const hoje = formatarDataISO(new Date()) === dia.chave;
-                  const valorDia = obterValorPrevistoDoDia(dia.data);
-                  const diasFinanceirosDia = obterDiasFinanceirosDoDia(
-                    dia.data,
-                  );
-                  const estiloFinanceiro = obterEstiloFinanceiroDia(
-                    valorDia,
-                    resumo.objetivoDiario,
-                  );
-                  const limiteEventos =
-                    tipoCalendario === "producao" ? (eDesktop ? 3 : 2) : 1;
-                  const fimSemana = eFimDeSemana(dia.data);
-                  const bloqueadoVisual =
-                    eBloqueioManual(dia.data) ||
-                    (fimSemana && !desbloqueadoFimSemana);
-
-                  return (
-                    <button
-                      key={dia.chave}
-                      type="button"
-                      onClick={() => abrirModalBloqueio(dia.data)}
-                      style={{
-                        ...estilos.diaMesCardStyle,
-                        opacity: dia.pertenceAoMesAtual ? 1 : 0.42,
-                        border: hoje
-                          ? "1px solid rgba(66,133,244,0.95)"
-                          : "1px solid rgba(255,255,255,0.06)",
-                        background: bloqueadoVisual
-                          ? "rgba(160,82,45,0.13)"
-                          : fimSemana && desbloqueadoFimSemana
-                            ? "rgba(52,168,83,0.08)"
-                            : "rgba(255,255,255,0.01)",
-                        boxShadow: hoje
-                          ? "inset 0 0 0 1px rgba(66,133,244,0.4)"
-                          : "none",
-                      }}
-                    >
-                      <div style={estilos.topoDiaStyle}>
-                        <div
-                          style={{
-                            ...estilos.numeroDiaStyle,
-                            background: hoje
-                              ? "rgba(66,133,244,0.95)"
-                              : "transparent",
-                            color: hoje ? "white" : "inherit",
-                          }}
-                        >
-                          {dia.dia}
-                        </div>
-                        <div
-                          style={{
-                            ...estilos.financeBadgeStyle,
-                            background: estiloFinanceiro.fundo,
-                            border: `1px solid ${estiloFinanceiro.borda}`,
-                            color: estiloFinanceiro.texto,
-                          }}
-                        >
-                          {tipoCalendario === "producao"
-                            ? `${valorDia.toFixed(0)} €`
-                            : tipoCalendario === "acabamentos"
-                              ? `${processosDoDia.length} acab.`
-                              : `${processosDoDia.length} mont.`}
-                        </div>
-                      </div>
-
-                      <div style={estilos.eventosDiaStyle}>
-                        {bloqueadoVisual && (
-                          <div
-                            style={{
-                              ...estilos.eventoStyle,
-                              background: "rgba(160,82,45,0.90)",
-                              border: "1px solid rgba(160,82,45,1)",
-                            }}
-                          >
-                            {fimSemana && !eBloqueioManual(dia.data)
-                              ? "Fim semana"
-                              : "Bloqueado"}
-                          </div>
-                        )}
-                        {fimSemana && desbloqueadoFimSemana && (
-                          <div
-                            style={{
-                              ...estilos.eventoStyle,
-                              background: "rgba(52,168,83,0.70)",
-                              border: "1px solid rgba(52,168,83,1)",
-                            }}
-                          >
-                            Desbloqueado
-                          </div>
-                        )}
-                        {processosDoDia.length === 0 &&
-                        !bloqueadoVisual &&
-                        !desbloqueadoFimSemana ? (
-                          <div style={estilos.diaVazioStyle}>—</div>
-                        ) : (
-                          processosDoDia
-                            .slice(0, limiteEventos)
-                            .map((processo) => {
-                              const planeamento = obterPlaneamentoProcesso(
-                                processo.id,
-                              );
-                              const cores = obterCoresEstado(processo.estado);
-                              const valorProcessoDia =
-                                obterValorProducaoDoProcessoNoDia(
-                                  processo.id,
-                                  dia.data,
-                                );
-                              return (
-                                <div
-                                  key={`${dia.chave}-${processo.id}`}
-                                  title={`${processo.codigo_val || "Sem VAL"} | ${processo.nome_obra || "Obra"} | Cliente: ${processo.nome_cliente || "—"} | ${valorProcessoDia.toFixed(2)} €`}
-                                  style={{
-                                    ...estilos.eventoStyle,
-                                    background: cores.fundo,
-                                    border: `1px solid ${cores.borda}`,
-                                  }}
-                                >
-                                  {planeamento?.temDatasManuais ? "✎ " : ""}
-                                  {!processoTemValorDefinido(processo) ? "⚠ " : ""}
-                                  {processo.calendario_arquivado ? "🗄 " : ""}
-                                  {processo.codigo_val || "Sem VAL"} ·{" "}
-                                  {processo.nome_obra ||
-                                    processo.nome_cliente ||
-                                    "Sem nome"}
-                                </div>
-                              );
-                            })
-                        )}
-                        {processosDoDia.length > limiteEventos && (
-                          <div style={estilos.maisEventosStyle}>
-                            +{processosDoDia.length - limiteEventos} mais
-                          </div>
-                        )}
-                      </div>
-
-                      <div
-                        style={{
-                          ...estilos.rodapeFinanceiroDiaStyle,
-                          background: estiloFinanceiro.fundo,
-                          border: `1px solid ${estiloFinanceiro.borda}`,
-                        }}
-                      >
-                        <div style={{ color: estiloFinanceiro.texto }}>
-                          {tipoCalendario === "producao"
-                            ? `${diasFinanceirosDia.toFixed(2)} dias`
-                            : `${processosDoDia.length} obras`}
-                        </div>
-                        <div style={{ opacity: 0.8 }}>
-                          {tipoCalendario === "producao"
-                            ? `Meta: ${resumo.objetivoDiario.toFixed(0)} €`
-                            : "Ver timeline"}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              </>
             )}
           </>
         )}
