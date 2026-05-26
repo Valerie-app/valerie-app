@@ -216,6 +216,62 @@ export default function AdminCalendarioPage() {
   );
 
   useEffect(() => {
+    try {
+      const alertasConcluidosGuardados = localStorage.getItem("valerie_alertas_concluidos");
+      const alertasAdiadosGuardados = localStorage.getItem("valerie_alertas_adiados");
+      const desenhosConcluidosGuardados = localStorage.getItem("valerie_desenhos_concluidos");
+      const desenhosAdiadosGuardados = localStorage.getItem("valerie_desenhos_adiados");
+
+      if (alertasConcluidosGuardados) {
+        setAlertasConcluidos(JSON.parse(alertasConcluidosGuardados));
+      }
+
+      if (alertasAdiadosGuardados) {
+        setAlertasAdiados(JSON.parse(alertasAdiadosGuardados));
+      }
+
+      if (desenhosConcluidosGuardados) {
+        setDesenhosConcluidos(JSON.parse(desenhosConcluidosGuardados));
+      }
+
+      if (desenhosAdiadosGuardados) {
+        setDesenhosAdiados(JSON.parse(desenhosAdiadosGuardados));
+      }
+    } catch (error) {
+      console.error("Erro ao carregar estados guardados:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "valerie_alertas_concluidos",
+      JSON.stringify(alertasConcluidos),
+    );
+  }, [alertasConcluidos]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "valerie_alertas_adiados",
+      JSON.stringify(alertasAdiados),
+    );
+  }, [alertasAdiados]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "valerie_desenhos_concluidos",
+      JSON.stringify(desenhosConcluidos),
+    );
+  }, [desenhosConcluidos]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "valerie_desenhos_adiados",
+      JSON.stringify(desenhosAdiados),
+    );
+  }, [desenhosAdiados]);
+
+
+  useEffect(() => {
     function atualizarLargura() {
       setLarguraJanela(window.innerWidth);
     }
