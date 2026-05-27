@@ -80,7 +80,7 @@ type DiaMes = {
   pertenceAoMesAtual: boolean;
 };
 
-type TipoCalendario = "producao" | "acabamentos" | "montagens" | "desenhos" | "detalhes";
+type TipoCalendario = "producao" | "acabamentos" | "montagens" | "desenhos" | "detalhes" | "sav";
 type FiltroArquivo = "ativas" | "arquivadas" | "todas";
 
 type PlaneamentoProcesso = {
@@ -2206,6 +2206,17 @@ export default function AdminCalendarioPage() {
           >
             Detalhes de Obra
           </button>
+
+          <button
+            type="button"
+            onClick={() => setTipoCalendario("sav")}
+            style={{
+              ...estilos.tabStyle,
+              ...(tipoCalendario === "sav" ? estilos.tabAtivaStyle : {}),
+            }}
+          >
+            SAV Pendentes
+          </button>
         </div>
 
         <div style={estilos.mesAtualStyle}>{formatarMesAno(mesAtual)}</div>
@@ -2510,7 +2521,7 @@ export default function AdminCalendarioPage() {
               </div>
             )}
 
-            {tipoCalendario !== "desenhos" && tipoCalendario !== "detalhes" && (
+            {tipoCalendario !== "desenhos" && tipoCalendario !== "detalhes" && tipoCalendario !== "sav" && (
               <>
                 <div style={estilos.calendarCardStyle}>
               <div style={estilos.diasSemanaHeaderStyle}>
@@ -3231,7 +3242,131 @@ export default function AdminCalendarioPage() {
           </>
         )}
 
-        {diaSelecionado && (
+        
+            {tipoCalendario === "sav" && (
+              <div style={estilos.timelineGridStyle}>
+                {processosVisiveis.map((processo) => {
+                  const aberto = cartoesAbertos[processo.id] || false;
+
+                  return (
+                    <div
+                      key={`sav-${processo.id}`}
+                      style={{
+                        ...estilos.timelineCardStyle,
+                        border: "1px solid rgba(244,180,0,0.35)",
+                      }}
+                    >
+                      <div style={estilos.tituloComAcoesStyle}>
+                        <div>
+                          <h2 style={{ marginTop: 0, marginBottom: "6px" }}>
+                            {processo.codigo_val || "Sem VAL"} ·{" "}
+                            {processo.nome_obra || "Sem nome"}
+                          </h2>
+
+                          <p
+                            style={{
+                              ...estilos.metaAjudaStyle,
+                              marginTop: 0,
+                            }}
+                          >
+                            SAV pendentes da obra
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => alternarCartao(processo.id)}
+                          style={estilos.botaoSecundarioStyle}
+                        >
+                          {aberto ? "Fechar" : "Abrir"}
+                        </button>
+                      </div>
+
+                      {aberto && (
+                        <>
+                          <div style={estilos.timelineDatasStyle}>
+                            <span>
+                              Cliente: {processo.nome_cliente || "—"}
+                            </span>
+
+                            <span>
+                              Entrega:{" "}
+                              {formatarData(
+                                processo.data_entrega_prevista,
+                              )}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: "14px",
+                              padding: "14px",
+                              borderRadius: "14px",
+                              background: "rgba(255,255,255,0.04)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                            }}
+                          >
+                            <h3 style={{ marginTop: 0 }}>
+                              SAV's na obra
+                            </h3>
+
+                            <textarea
+                              placeholder="Anotar SAVs da obra..."
+                              style={{
+                                width: "100%",
+                                minHeight: "140px",
+                                borderRadius: "12px",
+                                padding: "12px",
+                                background: "rgba(255,255,255,0.06)",
+                                color: "white",
+                                border:
+                                  "1px solid rgba(255,255,255,0.10)",
+                              }}
+                            />
+
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "10px",
+                                flexWrap: "wrap",
+                                marginTop: "14px",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                style={estilos.botaoPrincipalStyle}
+                              >
+                                + Adicionar SAV
+                              </button>
+
+                              <button
+                                type="button"
+                                style={estilos.botaoSecundarioStyle}
+                              >
+                                📷 Adicionar Fotos
+                              </button>
+
+                              <button
+                                type="button"
+                                style={{
+                                  ...estilos.botaoPrincipalStyle,
+                                  background:
+                                    "linear-gradient(135deg,#2e7d32,#43a047)",
+                                }}
+                              >
+                                ✅ Marcar como concluída
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+{diaSelecionado && (
           <div style={estilos.overlayStyle}>
             <div style={estilos.modalStyle}>
               <h3 style={{ marginTop: 0, marginBottom: "10px" }}>
@@ -4181,3 +4316,4 @@ function obterEstilosResponsivos(eDesktop: boolean, eTablet: boolean) {
     } satisfies CSSProperties,
   };
 }
+
